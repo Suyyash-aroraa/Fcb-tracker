@@ -113,7 +113,8 @@ fun MatchRow(m: Match, onOpen: (Match) -> Unit, showTv: Boolean = true, withMont
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(72.dp)) {
                 Text(Ui.shortDay(m), style = T.label.copy(fontWeight = FontWeight.SemiBold), color = P.text, maxLines = 1, softWrap = false)
-                Text(if (withMonth) "${Ui.month(m)} · ${Ui.compShort(m)}" else Ui.compShort(m), style = T.small, color = P.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (withMonth) Text(Ui.month(m), style = T.small, color = P.text2, maxLines = 1, softWrap = false)
+                Text(Ui.compShort(m), style = T.small, color = P.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             // Barça's crest always first, the opponent's crest next to its name; Home/Away says where.
             Crest(m.fcb, 24.dp)

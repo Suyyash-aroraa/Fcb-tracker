@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -66,7 +68,7 @@ fun MatchScreen(m0: Match, state: UiState, onBack: () -> Unit, onOpen: (Match) -
             Row(Modifier.pressable(onBack, "Back").padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(R.drawable.ic_arrow_left, size = 20.dp, tint = P.text2)
                 Spacer(Modifier.width(8.dp))
-                Text("Matches", style = T.label.copy(fontSize = 15.sp), color = P.text2)
+                Text("Back", style = T.label.copy(fontSize = 15.sp), color = P.text2)
             }
         }
         item { Scoreboard(m, d?.venue ?: m.venue, d?.attendance, d?.referee) }
@@ -155,7 +157,9 @@ private fun Side(t: TeamRef, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Crest(t, 64.dp)
         Spacer(Modifier.height(8.dp))
-        Text(t.short.uppercase(), style = T.display.copy(fontSize = 22.sp, lineHeight = 22.sp), color = P.text, textAlign = TextAlign.Center, maxLines = 2)
+        // Long single words ("BARCELONA") shrink rather than break mid-word on narrow phones.
+        val size = when { t.short.length > 11 -> 17; t.short.length > 8 -> 19; else -> 22 }
+        Text(t.short.uppercase(), style = T.display.copy(fontSize = size.sp, lineHeight = size.sp), color = P.text, textAlign = TextAlign.Center, maxLines = 2)
     }
 }
 
@@ -191,7 +195,7 @@ private fun EventRow(e: MatchEvent, m: Match) {
             sub?.let { Text(it, style = T.small, color = P.text3, textAlign = if (home) TextAlign.End else TextAlign.Start) }
         }
     }
-    Row(Modifier.fillMaxWidth().height(if (isGoal) 60.dp else 52.dp).padding(horizontal = 16.dp).semanticsLabel("${e.minute} ${sub ?: e.label}, $title"),
+    Row(Modifier.fillMaxWidth().heightIn(min = if (isGoal) 60.dp else 52.dp).height(IntrinsicSize.Min).padding(horizontal = 16.dp).semanticsLabel("${e.minute} ${sub ?: e.label}, $title"),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { if (home) body() }
         Box(Modifier.width(72.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {

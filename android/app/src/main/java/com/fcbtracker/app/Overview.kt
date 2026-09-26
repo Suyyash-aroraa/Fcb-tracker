@@ -150,7 +150,8 @@ private fun HeroSide(t: TeamRef, tag: String, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Crest(t, 72.dp)
         Spacer(Modifier.height(10.dp))
-        Text(t.short.uppercase(), style = T.display.copy(fontSize = 24.sp, lineHeight = 24.sp), color = P.text, textAlign = TextAlign.Center, maxLines = 2)
+        val size = when { t.short.length > 11 -> 18; t.short.length > 8 -> 21; else -> 24 }
+        Text(t.short.uppercase(), style = T.display.copy(fontSize = size.sp, lineHeight = size.sp), color = P.text, textAlign = TextAlign.Center, maxLines = 2)
         Text(tag.uppercase(), style = T.small.copy(fontSize = 11.sp, letterSpacing = 0.9.sp), color = P.text3)
     }
 }

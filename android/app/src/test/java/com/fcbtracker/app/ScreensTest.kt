@@ -96,7 +96,7 @@ class ScreensTest {
         waitFor("Meetings since 2020"); compose.waitUntil(60_000) { compose.onAllNodesWithText("Played").fetchSemanticsNodes().isNotEmpty() }
         settle(); Thread.sleep(1500); settle()
         compose.onRoot().captureRoboImage("$OUT/09-match-preview.png")
-        compose.onAllNodes(hasText("Matches")).onFirst().performClick(); settle()
+        Espresso.pressBack(); settle()
 
         // Last result's match centre.
         compose.onAllNodes(hasText("Match centre")).onFirst().performClick()
@@ -172,5 +172,49 @@ class NarrowMatchesTest {
         compose.onRoot().captureRoboImage("$OUT/17-coming-up-360dp.png")
         compose.onAllNodes(hasText("Table")).onLast().performClick(); compose.waitForIdle(); Thread.sleep(2000); compose.waitForIdle()
         compose.onRoot().captureRoboImage("$OUT/18-table-360dp.png")
+    }
+}
+
+/** Every played match opens its match centre: from the results list, the form strip and head-to-head. */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w360dp-h1400dp-night-xxhdpi")
+class OpenPastMatchesTest {
+    @get:Rule val compose = createComposeRule()
+
+    private fun idle(ms: Long = 1500) { compose.waitForIdle(); Thread.sleep(ms); compose.waitForIdle() }
+
+    @Test fun openResults() {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context)
+        val s = runBlocking { Data.repo(context).refresh() }
+        compose.setContent { FcbTheme { App(startTab = Tab.Matches) } }
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Fixtures").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(hasText("Results")).onFirst().performClick(); idle()
+        val first = s.played.last()
+        compose.onAllNodes(hasText(first.opponent.short)).onFirst().performClick(); idle(3000)
+        compose.onRoot().captureRoboImage("$OUT/19-open-from-results.png")
+        compose.waitUntil(30_000) { compose.onAllNodesWithText("Summary").fetchSemanticsNodes().isNotEmpty() }
+        Espresso.pressBack(); idle()
+
+        // The next match's preview, then an earlier season's meeting from the head-to-head list.
+        val next = s.next!!
+        val meetings = runBlocking { Data.repo(context).meetings(next.opponent.id, next.id) }
+        val oldest = meetings.last()
+        compose.onAllNodes(hasText("Fixtures")).onFirst().performClick(); idle()
+        compose.onAllNodes(hasText(next.opponent.short)).onFirst().performClick()
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Played").fetchSemanticsNodes().isNotEmpty() }; idle()
+        val year = Ui.month(oldest)
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText(year)); idle()
+        compose.onAllNodes(hasText(year)).onLast().performClick(); idle(3000)
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Summary").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(60_000) { compose.onAllNodesWithText(Ui.longDate(oldest)).fetchSemanticsNodes().isNotEmpty() }
+        idle()
+        compose.onRoot().captureRoboImage("$OUT/20-open-old-meeting.png")
+
+        // Back returns to the preview it came from.
+        Espresso.pressBack(); idle()
+        compose.waitUntil(30_000) { compose.onAllNodesWithText("Played").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(hasText("Preview")).onFirst().assertExists()
     }
 }

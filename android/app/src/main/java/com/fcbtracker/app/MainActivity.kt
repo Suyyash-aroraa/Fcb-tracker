@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -85,6 +86,8 @@ data class UiState(
     val detailError: String? = null,
     /** The live match's details (scorers in the hero), saved by the live refresh. */
     val liveDetail: MatchDetail? = null,
+    /** Opened matches, newest last: the match centre shows the last; Back returns to the one before. */
+    val stack: List<Match> = emptyList(),
     /** Head-to-head for the open match, since 2020. */
     val meetings: List<Match>? = null,
 )
@@ -134,9 +137,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Open a match on top of the current one (from a list, the form strip or head-to-head). */
+    fun push(m: Match) {
+        if (_state.value.stack.lastOrNull()?.id == m.id) return
+        _state.update { it.copy(stack = it.stack + m) }
+        open(m)
+    }
+
+    /** Back: to the previous match, or out of the match centre. */
+    fun pop() {
+        val rest = _state.value.stack.dropLast(1)
+        _state.update { it.copy(stack = rest) }
+        rest.lastOrNull()?.let { open(it) } ?: close()
+    }
+
     fun close() {
         detailJob?.cancel()
-        _state.update { it.copy(detail = null, detailError = null, meetings = null) }
+        _state.update { it.copy(detail = null, detailError = null, meetings = null, stack = emptyList()) }
     }
 }
 
@@ -152,20 +169,16 @@ enum class Tab(val label: String, val icon: Int, val selectedIcon: Int) {
 fun App(vm: AppViewModel = viewModel(), startTab: Tab = Tab.Overview) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(startTab) }
-    var openId by rememberSaveable { mutableStateOf<String?>(null) }
-    val open: (Match) -> Unit = { m -> openId = m.id }
-    val detailMatch = openId?.let { id ->
-        state.detail?.match?.takeIf { it.id == id } ?: state.snapshot?.withTv?.find { it.id == id } ?: state.meetings?.find { it.id == id }
-    }
-    LaunchedEffect(openId) {
-        if (openId != null && detailMatch != null && state.detail?.match?.id != openId) vm.open(detailMatch)
-    }
+    val open: (Match) -> Unit = vm::push
+    // The match object itself is kept, so games from earlier seasons (head-to-head) open too.
+    val current = state.stack.lastOrNull()
     val reduce = reducedMotion()
 
     Box(Modifier.fillMaxSize().background(P.bg)) {
-        if (openId != null && detailMatch != null) {
-            BackHandler { openId = null; vm.close() }
-            MatchScreen(detailMatch, state, onBack = { openId = null; vm.close() }, onOpen = { m -> vm.close(); openId = m.id })
+        if (current != null) {
+            BackHandler { vm.pop() }
+            val shown = state.snapshot?.withTv?.find { it.id == current.id } ?: current
+            key(current.id) { MatchScreen(shown, state, onBack = vm::pop, onOpen = vm::push) }
         } else {
             Column(Modifier.fillMaxSize()) {
                 TopBar(state, onRefresh = vm::refresh)
