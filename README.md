@@ -3,7 +3,7 @@
 FC Barcelona fixtures, results, lineups, match stats, squad, league table and news. A Cloudflare Python Worker scrapes the data with [Scrapling](https://github.com/D4Vinci/Scrapling), stores it in KV and serves the app.
 
 ```
-worker/    Cloudflare Python Worker: scraping (src/fcb, Scrapling parser), cron, KV API, frontend
+worker/    Cloudflare Python Worker: scraping (src/fcb, Scrapling parser), KV API, frontend; runs only on request
 scraper/   optional command-line runner of the same pipeline with Scrapling's fetchers (+ SofaScore)
 .claude/skills/UIUXmasterclass-skill/   design skill the frontend was built with
 ```
@@ -31,7 +31,7 @@ Scrapling has two halves. Its **parser** runs inside the Worker. Its **fetchers*
 
 ### Plan limits
 
-Built for **Workers Paid**: `wrangler.jsonc` sets `limits.cpu_ms` to 60 s so a full sync fits in one invocation. Workers Free allows only 10 ms of CPU per invocation (parsing counts, network waits don't). To run on Free, remove `limits` and call `pipeline.sync(..., max_steps=1, details_per_run=2)` from the cron, which spreads the work across ticks.
+Built for **Workers Paid**: `wrangler.jsonc` sets `limits.cpu_ms` to 60 s so a full sync fits in one invocation. Workers Free allows only 10 ms of CPU per invocation (parsing counts, network waits don't). To run on Free, remove `limits` and pass `max_steps=1, details_per_run=2` to `pipeline.sync`, which spreads the work across requests.
 
 ## Live matches
 
@@ -67,7 +67,7 @@ npm run test:e2e
 
 If your sandbox lets command-line tools out through a proxy but gives wrangler's local runtime no internet access, run `python3 worker/scripts/dev-egress-relay.py` and set `E2E_FETCH_RELAY=http://127.0.0.1:8798`.
 
-Playwright starts the Python Worker (`pywrangler dev`) on port 8788 with an empty store. The bootstrap step checks that the first request fills it and drives the real cron handler until every source has synced (no fixtures or mock data). The suites then check every view against the API in desktop and mobile Chromium. The checks cover the API and ingest auth, the overview, results and filters, the match centre tabs (timeline, stats, lineups, keyboard tab navigation), fixtures and the pre-match preview, squad sorting, the table, news filters, theme persistence, the not-found state, no horizontal scroll, and no em/en dashes in the copy.
+Playwright starts the Python Worker (`pywrangler dev`) on port 8788 with an empty store. The bootstrap step checks that the first request fills it with every source (no fixtures or mock data), and a test marks the data stale to check that a visit re-scrapes it in the background. The suites then check every view against the API in desktop and mobile Chromium. The checks cover the API and ingest auth, the overview, results and filters, the match centre tabs (timeline, stats, lineups, keyboard tab navigation), fixtures and the pre-match preview, squad sorting, the table, news filters, theme persistence, the not-found state, no horizontal scroll, and no em/en dashes in the copy.
 
 ## Deploy
 
@@ -90,7 +90,7 @@ In the Cloudflare dashboard: **Workers & Pages → your Worker → Settings → 
 
 Both run `scripts/ci.sh`, which installs uv (the build image has Python and pip but not uv), puts it on PATH for pywrangler, and bundles the Python packages before `wrangler deploy` / `wrangler preview`. The defaults (`npx wrangler deploy`, `npx wrangler preview`) would upload the Worker without its Python packages. The Worker's name in the dashboard must match `name` in `wrangler.jsonc` (`fcb-tracker`). Every push to that branch then redeploys.
 
-That's all: open the site and it fills itself, then the cron keeps it current. `npx wrangler secret put INGEST_TOKEN` is only needed for the token-protected endpoints (`/api/sync`, `/api/live/refresh`, `/api/ingest`).
+That's all: open the site and it fills itself, and visits keep it current. `npx wrangler secret put INGEST_TOKEN` is only needed for the token-protected endpoints (`/api/sync`, `/api/live/refresh`, `/api/ingest`).
 
 ## API
 
