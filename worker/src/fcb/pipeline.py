@@ -120,22 +120,49 @@ async def _squad(io: IO, store: Store, status: dict) -> dict:
 
 
 async def _tv(io: IO, store: Store, status: dict) -> dict:
-    """Where to watch in India for the next fixtures (and any live one), keyed by match id."""
+    """Where to watch in India for the next fixtures (and any live one), keyed by match id.
+
+    LiveSoccerTV covers every competition but refuses Cloudflare's IPs; FanCode (LALIGA's Indian
+    streamer) is the fallback for LALIGA fixtures. Nothing is shown for a fixture no source lists."""
     matches = await store.get("matches") or []
     wanted = [m for m in matches if m["status"].get("state") == "in"]
     wanted += [m for m in matches if m["status"].get("state") == "pre"][:TV_UPCOMING]
-    listings = tv.parse_team(await io.get_text(tv.TEAM_URL))
     guide = {k: v for k, v in (await store.get("tv") or {}).items() if k in {m["id"] for m in matches}}
-    found = 0
+    errors, found = [], 0
+
+    listings = []
+    try:
+        listings = tv.parse_team(await io.get_text(tv.TEAM_URL))
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"livesoccertv: {exc}")
+    fancode = []
+    try:
+        fancode = tv.parse_fancode(await io.get_text(tv.FANCODE_LALIGA))
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"fancode: {exc}")
+
     for m in wanted:
+        entry = None
         item = tv.match_listing(m, listings)
-        if not item:
-            continue
-        channels = tv.parse_country(await io.get_text(item["url"]))
-        guide[m["id"]] = {"country": tv.COUNTRY, "channels": channels, "url": item["url"], "checked": _iso(_now())}
-        found += bool(channels)
+        if item:
+            try:
+                channels = tv.parse_country(await io.get_text(item["url"]))
+                if channels:
+                    entry = {"channels": channels, "url": item["url"], "source": "LiveSoccerTV"}
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"livesoccertv match: {exc}")
+        if not entry:
+            fc = tv.match_fancode(m, fancode)
+            if fc:
+                entry = {"channels": ["FanCode"], "url": fc["url"], "source": "FanCode"}
+        if entry:
+            guide[m["id"]] = {"country": tv.COUNTRY, **entry, "checked": _iso(_now())}
+            found += 1
     await store.put("tv", guide)
-    return {"matches": len(wanted), "with_channels": found}
+    status["livesoccertv"] = {"ok": bool(listings), **({"detail": "; ".join(errors)[:300]} if errors else {})}
+    if not listings and not fancode:
+        raise RuntimeError("; ".join(errors) or "no TV listings")
+    return {"matches": len(wanted), "listed": found}
 
 
 async def _news(io: IO, store: Store, status: dict) -> dict:

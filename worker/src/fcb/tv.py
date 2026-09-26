@@ -68,3 +68,35 @@ def match_listing(match: dict, listings: list[dict]) -> dict | None:
         if delta <= MATCH_WINDOW_S and any(n in title or title.find(n[:6]) >= 0 for n in names if len(n) >= 3):
             return item
     return None
+
+
+# FanCode streams LALIGA in India. Its LALIGA schedule answers requests from Cloudflare (LiveSoccerTV
+# refuses Cloudflare's IPs), so it is the fallback for LALIGA fixtures and links straight to the stream.
+FANCODE_BASE = "https://www.fancode.com"
+FANCODE_LALIGA = f"{FANCODE_BASE}/football/tour/laliga-202627-19782952/matches"
+FANCODE_COMPETITIONS = {"esp.1"}
+
+
+def parse_fancode(html: str) -> list[dict]:
+    """Barcelona fixtures on FanCode's schedule: [{url, slug}]."""
+    out, seen = [], set()
+    for a in Selector(html).css("a[href*='/matches/']"):
+        href = (a.attrib.get("href") or "").split("?")[0]
+        slug = href.rstrip("/").split("/matches/")[-1].split("/")[0]
+        if "barcelona" not in slug or slug in seen:
+            continue
+        seen.add(slug)
+        out.append({"url": href if href.startswith("http") else FANCODE_BASE + href, "slug": slug})
+    return out
+
+
+def match_fancode(match: dict, items: list[dict]) -> dict | None:
+    if (match.get("competition") or {}).get("slug") not in FANCODE_COMPETITIONS:
+        return None
+    opponent = match["away"] if match.get("fcbSide") == "home" else match["home"]
+    names = [n for n in (_norm(opponent.get("short")), _norm(opponent.get("name"))) if len(n) >= 4]
+    for item in items:
+        slug = _norm(item["slug"].replace("barcelona", ""))
+        if any(n[:6] in slug for n in names):
+            return item
+    return None
