@@ -13,8 +13,8 @@ scraper/   optional command-line runner of the same pipeline with Scrapling's fe
 Everything runs in one **Cloudflare Python Worker** (`worker/`). There is no separate scraper to run.
 
 - **Scraping** happens inside the Worker. `worker/src/fcb/` parses every source with Scrapling's `Selector` (Scrapling's parser runs in Python Workers via Pyodide; lxml and orjson ship as Pyodide packages), and downloads with the Workers runtime `fetch`.
-- **A cron trigger runs every minute.** It follows live matches, and otherwise runs the most overdue sync step, one step per minute: fixtures, match details, table, squad and news. Each refreshes every 30 minutes (the squad every 6 hours).
-- **A fresh deploy fills itself.** The first request to an empty store fetches the fixtures inline; the cron fills in the rest over the next few minutes.
+- **A cron trigger runs every minute.** It follows live matches, then runs every sync step that is due: fixtures, match details, table, squad and news. Each refreshes every 30 minutes (the squad every 6 hours).
+- **A fresh deploy fills itself.** The first request to an empty store runs a full sync (every source, every match summary of the season) before answering, about 3 seconds.
 - **Every source reports its own status** in `/api/health` and the page footer, so a site that blocks Cloudflare shows up straight away.
 
 | Source | What it provides |
@@ -31,7 +31,7 @@ Scrapling has two halves. Its **parser** runs inside the Worker. Its **fetchers*
 
 ### Plan limits
 
-Workers Free allows **10 ms of CPU per invocation**. Parsing counts toward it; waiting on the network doesn't. The Worker keeps each cron run to one step to stay small, but parsing ESPN's JSON in Python can still exceed 10 ms. If the dashboard shows `Exceeded CPU Time Limits` (Error 1102), use Workers Paid ($5/month, 30 s CPU per invocation).
+Built for **Workers Paid**: `wrangler.jsonc` sets `limits.cpu_ms` to 60 s so a full sync fits in one invocation. Workers Free allows only 10 ms of CPU per invocation (parsing counts, network waits don't). To run on Free, remove `limits` and call `pipeline.sync(..., max_steps=1, details_per_run=2)` from the cron, which spreads the work across ticks.
 
 ## Live matches
 

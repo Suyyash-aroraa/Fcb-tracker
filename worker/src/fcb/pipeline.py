@@ -39,7 +39,7 @@ STEP_SOURCES = {"fixtures": ["espn"], "details": ["espn"], "table": ["espn"], "s
 # Live window: lineups appear about an hour before kick-off; extra time and penalties run long.
 LIVE_BEFORE = timedelta(minutes=75)
 LIVE_AFTER = timedelta(hours=3, minutes=30)
-RECENT_DETAILS = 12
+RECENT_DETAILS = None  # every completed match this season
 
 
 def _now() -> datetime:
@@ -76,7 +76,9 @@ async def _fixtures(io: IO, store: Store, status: dict) -> dict:
 
 async def _details(io: IO, store: Store, status: dict, limit: int) -> dict:
     matches = await store.get("matches") or []
-    done = [m for m in matches if m["status"].get("state") == "post"][-RECENT_DETAILS:]
+    done = [m for m in matches if m["status"].get("state") == "post"]
+    if RECENT_DETAILS:
+        done = done[-RECENT_DETAILS:]
     upcoming = [m for m in matches if m["status"].get("state") == "pre"][:1]
     todo = []
     for m in reversed(done):  # newest first, so a partial run covers the most relevant games
@@ -140,12 +142,13 @@ async def _news(io: IO, store: Store, status: dict) -> dict:
 
 
 async def sync(io: IO, store: Store, *, force: bool = False, bootstrap: bool = False, only: list[str] | None = None,
-               max_steps: int | None = None, log: Callable[[str], None] = print) -> dict:
+               max_steps: int | None = None, details_per_run: int = 1000, log: Callable[[str], None] = print) -> dict:
     """Run the steps that are due (all of them with force) and update meta.
 
-    `only` limits which steps may run; `max_steps` caps how many run in this invocation. The Worker's
-    cron runs one step per minute, which keeps each invocation's CPU time small (Workers Free allows
-    10 ms per invocation; parsing counts, waiting on the network doesn't)."""
+    `only` limits which steps may run; `max_steps` caps how many run in this invocation and
+    `details_per_run` how many match summaries are fetched. By default everything due runs at once
+    (Workers Paid). On Workers Free (10 ms CPU per invocation) pass max_steps=1, details_per_run=2
+    to spread the work across cron ticks."""
     meta = await store.get("meta") or {}
     last = meta.get("sync") or {}
     now = _now()
@@ -164,7 +167,7 @@ async def sync(io: IO, store: Store, *, force: bool = False, bootstrap: bool = F
     results: dict[str, Any] = {}
     runners: dict[str, Callable[[], Awaitable[dict]]] = {
         "fixtures": lambda: _fixtures(io, store, status),
-        "details": lambda: _details(io, store, status, RECENT_DETAILS if (bootstrap or force) else 2),
+        "details": lambda: _details(io, store, status, details_per_run),
         "table": lambda: _table(io, store, status),
         "squad": lambda: _squad(io, store, status),
         "news": lambda: _news(io, store, status),

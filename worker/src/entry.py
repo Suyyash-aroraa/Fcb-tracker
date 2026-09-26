@@ -92,9 +92,9 @@ class Default(WorkerEntrypoint):
         return hmac.compare_digest(hashlib.sha256(token.encode()).digest(), hashlib.sha256(secret.encode()).digest())
 
     async def _ensure_data(self) -> None:
-        """First request after a deploy: fetch fixtures now; the cron fills in the rest within minutes."""
+        """First request after a deploy: fetch everything before answering."""
         if await self.store.get("matches") is None:
-            await pipeline.sync(self.io, self.store, force=True, only=["fixtures"])
+            await pipeline.sync(self.io, self.store, force=True, bootstrap=True)
 
     def _refresh_live_in_background(self) -> None:
         global _last_live_refresh
@@ -238,8 +238,8 @@ class Default(WorkerEntrypoint):
         return await self.env.ASSETS.fetch(request)
 
     async def scheduled(self, controller, env, ctx):
-        # Every minute: follow live matches; otherwise run the most overdue sync step.
+        # Every minute: follow live matches, then run every sync step that is due.
         live = await pipeline.refresh_live(self.io, self.store)
-        result = {"ran": []} if live else await pipeline.sync(self.io, self.store, max_steps=1)
+        result = await pipeline.sync(self.io, self.store)
         if live or result.get("ran"):
             print(f"cron: live={live} ran={result.get('ran')}")
