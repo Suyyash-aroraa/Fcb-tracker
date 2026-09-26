@@ -191,7 +191,7 @@ main { max-width: 1240px; margin: 0 auto; padding: var(--s5) var(--s5) var(--s7)
   background: var(--hero-bg); color: #eef1f7;
   display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   box-shadow: var(--shadow);
-  --text-2: #b8c1d6; --text-3: #8f9ab3; --line: rgba(255, 255, 255, 0.1); --accent-text: #f2c94c; --surface-2: rgba(255,255,255,.06);
+  --text: #eef1f7; --text-2: #b8c1d6; --text-3: #8f9ab3; --line: rgba(255, 255, 255, 0.1); --accent-text: #f2c94c; --surface-2: rgba(255,255,255,.06);
 }
 .hero::before {
   content: ""; position: absolute; inset: 0 auto 0 0; width: 10px;
