@@ -122,8 +122,9 @@ async def _squad(io: IO, store: Store, status: dict) -> dict:
 async def _tv(io: IO, store: Store, status: dict) -> dict:
     """Where to watch in India for the next fixtures (and any live one), keyed by match id.
 
-    LiveSoccerTV covers every competition but refuses Cloudflare's IPs; FanCode (LALIGA's Indian
-    streamer) is the fallback for LALIGA fixtures. Nothing is shown for a fixture no source lists."""
+    LiveSoccerTV covers every competition but refuses Cloudflare's IPs; FanCode is the fallback for
+    the competitions it carries (LALIGA, and Copa del Rey / Supercopa when it lists them). Nothing is
+    shown for a fixture no source lists."""
     matches = await store.get("matches") or []
     wanted = [m for m in matches if m["status"].get("state") == "in"]
     wanted += [m for m in matches if m["status"].get("state") == "pre"][:TV_UPCOMING]
@@ -135,9 +136,16 @@ async def _tv(io: IO, store: Store, status: dict) -> dict:
         listings = tv.parse_team(await io.get_text(tv.TEAM_URL))
     except Exception as exc:  # noqa: BLE001
         errors.append(f"livesoccertv: {exc}")
-    fancode = []
+    fancode, tours = [], {}
     try:
-        fancode = tv.parse_fancode(await io.get_text(tv.FANCODE_LALIGA))
+        tours = tv.parse_fancode_tours(await io.get_text(tv.FANCODE_FOOTBALL))
+        seen = set()
+        for comp in {(m.get("competition") or {}).get("slug") for m in wanted} & set(tours):
+            for url in tours[comp]:
+                for item in tv.parse_fancode(await io.get_text(url), comp, url):
+                    if item["slug"] not in seen:
+                        seen.add(item["slug"])
+                        fancode.append(item)
     except Exception as exc:  # noqa: BLE001
         errors.append(f"fancode: {exc}")
 
@@ -155,12 +163,17 @@ async def _tv(io: IO, store: Store, status: dict) -> dict:
             fc = tv.match_fancode(m, fancode)
             if fc:
                 entry = {"channels": ["FanCode"], "url": fc["url"], "source": "FanCode"}
+        comp = (m.get("competition") or {}).get("slug")
+        if not entry and comp in tours and m["id"] not in guide:
+            # FanCode holds this competition's rights in India but hasn't put the fixture on its
+            # schedule page yet: link the competition's schedule until it does.
+            entry = {"channels": ["FanCode"], "url": tours[comp][0], "source": "FanCode"}
         if entry:
             guide[m["id"]] = {"country": tv.COUNTRY, **entry, "checked": _iso(_now())}
             found += 1
     await store.put("tv", guide)
     status["livesoccertv"] = {"ok": bool(listings), **({"detail": "; ".join(errors)[:300]} if errors else {})}
-    if not listings and not fancode:
+    if not listings and not fancode and not tours:
         raise RuntimeError("; ".join(errors) or "no TV listings")
     return {"matches": len(wanted), "listed": found}
 
