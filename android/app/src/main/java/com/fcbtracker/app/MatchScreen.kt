@@ -278,7 +278,7 @@ private fun Preview(m: Match, state: UiState, onOpen: (Match) -> Unit) {
         if (pair.size == 2) Panel {
             Column {
                 Heading("League position", Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 4.dp))
-                StandingsHeader(); pair.forEachIndexed { i, r -> if (i > 0) Hairline(); StandingsLine(r) }
+                StandingsHeader(compact = true); pair.forEachIndexed { i, r -> if (i > 0) Hairline(); StandingsLine(r, compact = true) }
             }
         }
         s?.form?.takeIf { it.isNotEmpty() }?.let { form ->
@@ -319,7 +319,7 @@ private fun Preview(m: Match, state: UiState, onOpen: (Match) -> Unit) {
                         }
                         ms.groupBy { Ui.season(it) }.forEach { (season, games) ->
                             Text(season, style = T.num.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = P.text3, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-                            games.forEach { MatchRow(it, onOpen, showTv = false) }
+                            games.forEach { MatchRow(it, onOpen, showTv = false, withMonth = true) }
                         }
                     }
                 }

@@ -39,6 +39,21 @@ object Ui {
         return if (m.isUpcoming) "$name, ${time(m)}" else name
     }
 
+    /** Weekday and day of month ("Sat 10"), for lists already grouped by month. */
+    fun shortDay(m: Match): String {
+        val day = m.kickoff.atZone(zone).toLocalDate(); val today = LocalDate.now(zone)
+        return when (day) {
+            today -> "Today"; today.plusDays(1) -> "Tomorrow"; today.minusDays(1) -> "Yesterday"
+            else -> day.format(DateTimeFormatter.ofPattern("EEE d", Locale.getDefault()))
+        }
+    }
+
+    /** Short month, with the year when it isn't this year ("Nov", "Feb 2024"). */
+    fun month(m: Match): String {
+        val d = m.kickoff.atZone(zone)
+        return d.format(DateTimeFormatter.ofPattern(if (d.year == LocalDate.now(zone).year) "MMM" else "MMM yyyy", Locale.getDefault()))
+    }
+
     fun countdown(m: Match, now: Instant = Instant.now()): String {
         val d = Duration.between(now, m.kickoff)
         if (d.isNegative) return "Kick-off"

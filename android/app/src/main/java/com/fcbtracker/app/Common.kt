@@ -91,42 +91,55 @@ fun ScoreText(m: Match, fontSize: Int, modifier: Modifier = Modifier) {
     )
 }
 
+/** A score from Barcelona's side ("3-1" = Barça 3), the losing number dimmed, as in the form strip. */
 @Composable
-fun MatchRow(m: Match, onOpen: (Match) -> Unit, showTv: Boolean = true) {
+fun FcbScoreText(m: Match, fontSize: Int) {
+    val us = m.fcb.score; val them = m.opponent.score
+    val dim = P.text3
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = if (m.result == "L") dim else P.text)) { append("${us ?: "-"}") }
+            withStyle(SpanStyle(color = dim, fontWeight = FontWeight.Bold)) { append("-") }
+            withStyle(SpanStyle(color = if (m.result == "W") dim else P.text)) { append("${them ?: "-"}") }
+        },
+        style = T.display.copy(fontSize = fontSize.sp, letterSpacing = 1.sp), maxLines = 1, softWrap = false,
+    )
+}
+
+@Composable
+fun MatchRow(m: Match, onOpen: (Match) -> Unit, showTv: Boolean = true, withMonth: Boolean = false) {
     val label = "${m.home.name} ${if (m.isUpcoming) "versus" else m.scoreText} ${m.away.name}, ${Ui.compName(m)}, ${Ui.dayLabel(m)}"
     Column(Modifier.fillMaxWidth().pressable({ onOpen(m) }).semanticsLabel(label).padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(76.dp)) {
-                Text(Ui.dayLabel(m).substringBefore(","), style = T.label.copy(fontWeight = FontWeight.SemiBold), color = P.text, maxLines = 1)
-                Text(Ui.compShort(m), style = T.small, color = P.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.width(72.dp)) {
+                Text(Ui.shortDay(m), style = T.label.copy(fontWeight = FontWeight.SemiBold), color = P.text, maxLines = 1, softWrap = false)
+                Text(if (withMonth) "${Ui.month(m)} · ${Ui.compShort(m)}" else Ui.compShort(m), style = T.small, color = P.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            // Crests in home/away order with the score (or kick-off) between them.
-            Crest(m.home, 26.dp)
-            Box(Modifier.width(64.dp), contentAlignment = Alignment.Center) {
-                if (m.isUpcoming) Text(Ui.time(m), style = T.num.copy(fontSize = 13.sp), color = P.text2, maxLines = 1)
-                else ScoreText(m, 22)
+            // Barça's crest always first, the opponent's crest next to its name; Home/Away says where.
+            Crest(m.fcb, 24.dp)
+            Box(Modifier.width(if (m.isUpcoming) 70.dp else 52.dp), contentAlignment = Alignment.Center) {
+                if (m.isUpcoming) Text(Ui.time(m), style = T.num.copy(fontSize = 12.sp), color = P.text2, maxLines = 1, softWrap = false)
+                else FcbScoreText(m, 21)
             }
-            Crest(m.away, 26.dp)
-            Spacer(Modifier.width(12.dp))
+            Crest(m.opponent, 24.dp)
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(m.opponent.short, style = T.label.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold), color = P.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(if (m.fcbSide == "home") "Home" else "Away", style = T.small, color = P.text3)
             }
-            Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
-                when {
-                    m.isLive -> Box(Modifier.size(8.dp).background(P.loss, PillShape))
-                    m.isPlayed -> WdlChip(m.result, 22.dp)
-                }
+            when {
+                m.isLive -> Box(Modifier.padding(start = 8.dp).size(8.dp).background(P.loss, PillShape))
+                m.isPlayed -> Box(Modifier.padding(start = 8.dp)) { WdlChip(m.result, 22.dp) }
             }
         }
         if (showTv && !m.isPlayed) m.tv?.let {
-            Row(Modifier.padding(start = 76.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 72.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(R.drawable.ic_television_simple, size = 14.dp, tint = P.text3)
                 Spacer(Modifier.width(6.dp))
                 Text(it.channels.joinToString(", "), style = T.small, color = P.text2)
             }
         }
-        m.note?.let { Text(it, style = T.small, color = P.text3, modifier = Modifier.padding(start = 76.dp, top = 4.dp)) }
+        m.note?.let { Text(it, style = T.small, color = P.text3, modifier = Modifier.padding(start = 72.dp, top = 4.dp)) }
     }
 }
 
@@ -158,14 +171,21 @@ fun WatchIndia(tv: TvListing, onHero: Boolean = false) {
 /** Barcelona's goals in a match detail, for scorer lists. */
 fun MatchDetail.goalsFor(side: String) = events.filter { (it.kind == "goal" || it.kind == "own-goal") && it.side == side }
 
+/** Table columns: on narrow phones the excerpts keep P, GD and Pts, and the full table tightens up. */
 @Composable
-fun StandingsHeader() {
+private fun columns(compact: Boolean): List<Pair<String, Int>> {
+    val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 400
+    val n = if (narrow) 24 else 28; val wide = if (narrow) 34 else 38
+    return if (compact && narrow) listOf("P" to n, "GD" to wide, "Pts" to wide)
+    else listOf("P" to n, "W" to n, "D" to n, "L" to n, "GD" to wide, "Pts" to wide)
+}
+
+@Composable
+fun StandingsHeader(compact: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("#", Modifier.width(26.dp), style = T.small, color = P.text3)
         Text("Team", Modifier.weight(1f), style = T.small, color = P.text3)
-        listOf("P", "W", "D", "L", "GD", "Pts").forEach { h ->
-            Text(h, Modifier.width(if (h == "Pts" || h == "GD") 38.dp else 28.dp), style = T.small, color = P.text3, textAlign = TextAlign.End)
-        }
+        columns(compact).forEach { (h, w) -> Text(h, Modifier.width(w.dp), style = T.small, color = P.text3, textAlign = TextAlign.End) }
     }
     Hairline()
 }
@@ -174,6 +194,7 @@ fun StandingsHeader() {
 @Composable
 fun StandingsLine(r: TableRow, compact: Boolean = false) {
     val us = r.team.id == FCB_ESPN_ID
+    val values = mapOf("P" to "${r.played}", "W" to "${r.won}", "D" to "${r.drawn}", "L" to "${r.lost}", "GD" to if (r.gd > 0) "+${r.gd}" else "${r.gd}", "Pts" to "${r.points}")
     Row(Modifier.fillMaxWidth().height(if (compact) 44.dp else 48.dp).background(if (us) P.surface2 else P.surface), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(3.dp).fillMaxHeight().background(if (us) P.accent else P.surface))
         Row(Modifier.padding(start = 13.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -181,9 +202,11 @@ fun StandingsLine(r: TableRow, compact: Boolean = false) {
             Crest(r.team, 22.dp); Spacer(Modifier.width(10.dp))
             Text(r.team.short, Modifier.weight(1f), style = T.label.copy(fontSize = 14.sp, fontWeight = if (us) FontWeight.Bold else FontWeight.Medium),
                 color = P.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            listOf(r.played, r.won, r.drawn, r.lost).forEach { Text("$it", Modifier.width(28.dp), style = T.num.copy(fontSize = 13.sp), color = P.text2, textAlign = TextAlign.End) }
-            Text(if (r.gd > 0) "+${r.gd}" else "${r.gd}", Modifier.width(38.dp), style = T.num.copy(fontSize = 13.sp), color = P.text2, textAlign = TextAlign.End)
-            Text("${r.points}", Modifier.width(38.dp), style = T.num.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = P.text, textAlign = TextAlign.End)
+            columns(compact).forEach { (h, w) ->
+                Text(values.getValue(h), Modifier.width(w.dp), textAlign = TextAlign.End,
+                    style = T.num.copy(fontSize = if (h == "Pts") 14.sp else 13.sp, fontWeight = if (h == "Pts") FontWeight.SemiBold else FontWeight.Medium),
+                    color = if (h == "Pts") P.text else P.text2)
+            }
         }
     }
 }

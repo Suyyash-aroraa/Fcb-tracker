@@ -68,7 +68,7 @@ fun OverviewScreen(state: UiState, onRefresh: () -> Unit, onOpen: (Match) -> Uni
                 Block(pad = false) {
                     Column {
                         Heading(t.league.removePrefix("Spanish "), Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp)) { LinkText("Full table", { onTab(Tab.Table) }) }
-                        StandingsHeader()
+                        StandingsHeader(compact = true)
                         t.rows.subList(start, minOf(t.rows.size, start + 5)).forEach { StandingsLine(it, compact = true) }
                     }
                 }
@@ -79,7 +79,7 @@ fun OverviewScreen(state: UiState, onRefresh: () -> Unit, onOpen: (Match) -> Uni
             Block(pad = false) {
                 Column(Modifier.padding(bottom = 6.dp)) {
                     Heading("Coming up", Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp)) { LinkText("Calendar", { onTab(Tab.Matches) }) }
-                    upcoming.forEachIndexed { i, m -> if (i > 0) Hairline(Modifier.padding(horizontal = 16.dp)); MatchRow(m, onOpen) }
+                    upcoming.forEachIndexed { i, m -> if (i > 0) Hairline(Modifier.padding(horizontal = 16.dp)); MatchRow(m, onOpen, withMonth = true) }
                     Text("Times in ${java.time.ZoneId.systemDefault().id.substringAfter("/").replace('_', ' ')} time.", style = T.small, color = P.text3,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                 }

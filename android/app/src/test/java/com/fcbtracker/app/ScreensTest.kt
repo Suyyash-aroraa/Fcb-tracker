@@ -147,3 +147,30 @@ class LightThemeTest {
         compose.onRoot().captureRoboImage("$OUT/14-squad-light.png")
     }
 }
+
+/** Matches on a narrow phone (360dp): full names, Barça's crest first on every row. */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w360dp-h1400dp-night-xxhdpi")
+class NarrowMatchesTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test fun matchesNarrow() {
+        // India time: the widest kick-off times ("12:30 am").
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Kolkata"))
+        val context: Context = ApplicationProvider.getApplicationContext()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context)
+        runBlocking { Data.repo(context).refresh() }
+        compose.setContent { FcbTheme { App(startTab = Tab.Matches) } }
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Fixtures").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle(); Thread.sleep(2500); compose.waitForIdle()
+        compose.onRoot().captureRoboImage("$OUT/15-fixtures-360dp.png")
+        compose.onAllNodes(hasText("Results")).onFirst().performClick(); compose.waitForIdle(); Thread.sleep(2000); compose.waitForIdle()
+        compose.onRoot().captureRoboImage("$OUT/16-results-360dp.png")
+        compose.onAllNodes(hasText("Overview")).onLast().performClick(); compose.waitForIdle(); Thread.sleep(2500); compose.waitForIdle()
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("COMING UP")); compose.waitForIdle(); Thread.sleep(1500); compose.waitForIdle()
+        compose.onRoot().captureRoboImage("$OUT/17-coming-up-360dp.png")
+        compose.onAllNodes(hasText("Table")).onLast().performClick(); compose.waitForIdle(); Thread.sleep(2000); compose.waitForIdle()
+        compose.onRoot().captureRoboImage("$OUT/18-table-360dp.png")
+    }
+}
