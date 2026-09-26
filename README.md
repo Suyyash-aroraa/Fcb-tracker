@@ -78,6 +78,19 @@ cd worker
 npm run deploy                       # uv run pywrangler deploy; the KV namespace is provisioned automatically
 ```
 
+### From the GitHub repo (Workers Builds)
+
+In the Cloudflare dashboard: **Workers & Pages → your Worker → Settings → Builds → Connect**, pick this repository, then set:
+
+| Setting | Value |
+|---|---|
+| Branch | the branch to deploy from (e.g. `main`) |
+| Root directory | `worker` |
+| Build command | *(leave empty)* |
+| Deploy command | `npm run deploy:ci` |
+
+`deploy:ci` installs uv (the build image has Python and pip but not uv) and runs `pywrangler deploy`, which bundles the Python packages. Plain `npx wrangler deploy` does not. The Worker's name in the dashboard must match `name` in `wrangler.jsonc` (`fcb-tracker`). Every push to that branch then redeploys.
+
 That's all: open the site and it fills itself, then the cron keeps it current. `npx wrangler secret put INGEST_TOKEN` is only needed for the token-protected endpoints (`/api/sync`, `/api/live/refresh`, `/api/ingest`).
 
 ## API
