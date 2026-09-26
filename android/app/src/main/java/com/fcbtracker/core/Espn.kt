@@ -13,7 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * ESPN's public JSON: fixtures and results in every competition, match summaries (events, team
- * stats, lineups) and the LALIGA table. Same parsing as the web Worker's fcb/espn.py.
+ * stats, lineups), the squad, news and the LALIGA table.
  */
 object Espn {
     private const val SITE = "https://site.web.api.espn.com/apis/site/v2/sports/soccer"

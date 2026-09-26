@@ -7,7 +7,7 @@ import kotlin.math.abs
 /**
  * Where to watch in India. LiveSoccerTV lists broadcasters per country for every competition;
  * FanCode (LALIGA, and the Copa del Rey / Supercopa when it carries them) is the fallback.
- * Same logic as the web Worker's fcb/tv.py.
+ * Only fixtures within two hours of the same kick-off and naming the opponent count as a match.
  */
 object Tv {
     private const val LST = "https://www.livesoccertv.com"

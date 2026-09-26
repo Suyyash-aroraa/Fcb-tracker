@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-/** fcbarcelona.com: official player photos and profile links, and first-team news (same as fcb/official.py). */
+/** fcbarcelona.com: official player photos and profile links, and first-team news. */
 object Official {
     private const val BASE = "https://www.fcbarcelona.com"
     const val PLAYERS = "$BASE/en/football/first-team/players"
@@ -84,7 +84,7 @@ object Official {
     }
 }
 
-/** Google News RSS: the last week of Barça headlines from many publishers (same as fcb/google_news.py). */
+/** Google News RSS: the last week of Barça headlines from many publishers. */
 object GoogleNews {
     const val FEED_URL = "https://news.google.com/rss/search?q=%22FC+Barcelona%22+OR+%22Bar%C3%A7a%22+when%3A7d&hl=en-US&gl=US&ceid=US:en"
 
