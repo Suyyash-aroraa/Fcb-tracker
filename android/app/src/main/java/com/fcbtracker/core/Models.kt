@@ -120,6 +120,44 @@ data class TableRow(
 @Serializable
 data class Table(val league: String, val rows: List<TableRow>)
 
+@Serializable
+data class PlayerStats(
+    val apps: Int? = null, val subIns: Int? = null, val goals: Int? = null, val assists: Int? = null,
+    val shots: Int? = null, val shotsOnTarget: Int? = null, val yellow: Int? = null, val red: Int? = null,
+    val fouls: Int? = null, val saves: Int? = null, val conceded: Int? = null,
+)
+
+@Serializable
+data class Player(
+    val id: String,
+    val name: String,
+    val short: String? = null,
+    val number: String? = null,
+    /** G, D, M or F. */
+    val pos: String? = null,
+    val posName: String? = null,
+    val age: Int? = null,
+    val nationality: String? = null,
+    val flag: String? = null,
+    /** Official club photo when matched, else ESPN's headshot. */
+    val headshot: String? = null,
+    val profile: String? = null,
+    val injured: Boolean = false,
+    val stats: PlayerStats = PlayerStats(),
+)
+
+@Serializable
+data class NewsItem(
+    val title: String,
+    val summary: String? = null,
+    val url: String,
+    val image: String? = null,
+    val source: String? = null,
+    val published: String? = null,
+    /** official, google or espn. */
+    val origin: String,
+)
+
 /** Everything the app and widget show, as last fetched. Saved on the phone between refreshes. */
 @Serializable
 data class Snapshot(
@@ -130,6 +168,10 @@ data class Snapshot(
     /** India TV listings by match id, and when they were last checked. */
     val tv: Map<String, TvListing> = emptyMap(),
     val tvCheckedAt: String? = null,
+    val squad: List<Player> = emptyList(),
+    val squadCheckedAt: String? = null,
+    val news: List<NewsItem> = emptyList(),
+    val newsCheckedAt: String? = null,
     /** Per-source problems from the last refresh, for the status line. */
     val errors: Map<String, String> = emptyMap(),
 ) {

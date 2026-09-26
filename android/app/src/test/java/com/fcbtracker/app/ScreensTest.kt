@@ -7,7 +7,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
+import androidx.test.espresso.Espresso
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
@@ -37,7 +43,7 @@ private const val OUT = "build/screens"
 /** Renders the real app and widget with live data (fetched in the test, no mock data). */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w411dp-h2400dp-night-xxhdpi")
+@Config(sdk = [34], qualifiers = "w411dp-h1600dp-night-xxhdpi")
 class ScreensTest {
     @get:Rule val compose = createComposeRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
@@ -57,29 +63,51 @@ class ScreensTest {
 
     private fun waitFor(text: String) = compose.waitUntil(60_000) { compose.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
 
+    private fun tab(label: String) { compose.onAllNodes(hasText(label)).onLast().performClick(); settle() }
+
     @Test fun appScreens() {
         compose.setContent { FcbTheme { App() } }
-        waitFor("Coming up"); settle()
-        compose.onRoot().captureRoboImage("$OUT/1-overview.png")
+        waitFor("Coming up"); compose.waitUntil(60_000) { compose.onAllNodesWithText("Leaders", ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
+        settle(); Thread.sleep(2000); settle()
+        compose.onRoot().captureRoboImage("$OUT/01-overview.png")
 
-        compose.onNode(hasText("Matches")).performClick(); settle()
-        compose.onRoot().captureRoboImage("$OUT/2-fixtures.png")
-        compose.onNode(hasText("Results", substring = true)).performClick(); settle()
-        compose.onRoot().captureRoboImage("$OUT/3-results.png")
+        tab("Matches"); compose.onRoot().captureRoboImage("$OUT/02-fixtures.png")
+        compose.onAllNodes(hasText("Results")).onFirst().performClick(); settle()
+        compose.onRoot().captureRoboImage("$OUT/03-results.png")
 
-        compose.onNode(hasText("Table")).performClick(); settle()
-        compose.onRoot().captureRoboImage("$OUT/4-table.png")
+        tab("Squad"); Thread.sleep(3000); settle()
+        compose.onRoot().captureRoboImage("$OUT/04-squad.png")
+        compose.onAllNodes(hasText("Goals")).onFirst().performClick(); settle(); Thread.sleep(1500); settle()
+        compose.onRoot().captureRoboImage("$OUT/05-squad-by-goals.png")
+        val top = snapshot.squad.maxBy { it.stats.goals ?: 0 }.name
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText(top)); settle()
+        compose.onRoot().captureRoboImage("$OUT/05b-forwards.png")
+        compose.onAllNodes(hasText(top)).onFirst().performClick(); settle(); Thread.sleep(1500); settle()
+        compose.onRoot().captureRoboImage("$OUT/06-player-sheet.png")
+        Espresso.pressBack(); settle()
 
-        // Last result's match centre, loaded from ESPN when opened.
-        compose.onNode(hasText("Overview")).performClick(); settle()
-        compose.onNode(hasText("Last result", ignoreCase = true)).performClick()
-        waitFor("Summary"); compose.waitUntil(60_000) { compose.onAllNodesWithText("GOAL").fetchSemanticsNodes().isNotEmpty() || snapshot.last?.scoreText == "0-0" }
+        tab("Table"); compose.onRoot().captureRoboImage("$OUT/07-table.png")
+        tab("News"); Thread.sleep(3000); settle()
+        compose.onRoot().captureRoboImage("$OUT/08-news.png")
+
+        // Next match: preview with head-to-head since 2020.
+        tab("Overview")
+        compose.onAllNodes(hasText("VS")).onFirst().performClick()
+        waitFor("Meetings since 2020"); compose.waitUntil(60_000) { compose.onAllNodesWithText("Played").fetchSemanticsNodes().isNotEmpty() }
+        settle(); Thread.sleep(1500); settle()
+        compose.onRoot().captureRoboImage("$OUT/09-match-preview.png")
+        compose.onAllNodes(hasText("Matches")).onFirst().performClick(); settle()
+
+        // Last result's match centre.
+        compose.onAllNodes(hasText("Match centre")).onFirst().performClick()
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Summary").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Assist", substring = true).fetchSemanticsNodes().isNotEmpty() || snapshot.last?.scoreText == "0-0" }
         settle()
-        compose.onRoot().captureRoboImage("$OUT/5-match-summary.png")
-        compose.onNode(hasText("Stats")).performClick(); settle()
-        compose.onRoot().captureRoboImage("$OUT/6-match-stats.png")
-        compose.onNode(hasText("Lineups")).performClick(); settle()
-        compose.onRoot().captureRoboImage("$OUT/7-match-lineups.png")
+        compose.onRoot().captureRoboImage("$OUT/10-match-summary.png")
+        compose.onAllNodes(hasText("Stats")).onFirst().performClick(); settle(); Thread.sleep(800); settle()
+        compose.onRoot().captureRoboImage("$OUT/11-match-stats.png")
+        compose.onAllNodes(hasText("Lineups")).onFirst().performClick(); settle()
+        compose.onRoot().captureRoboImage("$OUT/12-match-lineups.png")
     }
 
     @Test fun widgetSizes() {
@@ -87,7 +115,7 @@ class ScreensTest {
         val density = activity.resources.displayMetrics.density
         val frame = FrameLayout(activity)
         activity.setContentView(frame)
-        for ((name, size) in listOf("small" to DpSize(130.dp, 130.dp), "wide" to DpSize(320.dp, 130.dp), "tall" to DpSize(320.dp, 200.dp))) {
+        for ((name, size) in listOf("small" to DpSize(150.dp, 150.dp), "wide" to DpSize(340.dp, 160.dp), "tall" to DpSize(340.dp, 270.dp))) {
             val views = runBlocking { FcbWidget().compose(context, size = size) }
             frame.removeAllViews()
             val v: View = views.apply(activity, frame)
@@ -97,5 +125,25 @@ class ScreensTest {
             Log.i("ScreensTest", "widget $name rendered")
         }
         assertTrue(snapshot.matches.isNotEmpty())
+    }
+}
+
+/** The overview in the light theme. */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w411dp-h1600dp-notnight-xxhdpi")
+class LightThemeTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test fun overviewLight() {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context)
+        runBlocking { Data.repo(context).refresh(forceTv = true) }
+        compose.setContent { FcbTheme { App() } }
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Leaders", ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle(); Thread.sleep(3000); compose.waitForIdle()
+        compose.onRoot().captureRoboImage("$OUT/13-overview-light.png")
+        compose.onAllNodes(hasText("Squad")).onLast().performClick(); compose.waitForIdle(); Thread.sleep(3000); compose.waitForIdle()
+        compose.onRoot().captureRoboImage("$OUT/14-squad-light.png")
     }
 }

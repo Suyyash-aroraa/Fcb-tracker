@@ -108,10 +108,11 @@ That's all: open the site and it fills itself, and visits keep it current. `npx 
 
 ## Android app and widget
 
-`android/` is a native Kotlin app (Jetpack Compose + a Glance home-screen widget) that does all the work on the phone: it downloads and parses ESPN (fixtures, live score, events, stats, lineups, table), LiveSoccerTV and FanCode (where to watch in India) itself, with the same logic as the Worker, ported to Kotlin. It doesn't talk to the Worker.
+`android/` is a native Kotlin app (Jetpack Compose + a Glance home-screen widget) that does all the work on the phone: it downloads and parses ESPN (fixtures, live score, events, stats, lineups, squad, table, news), fcbarcelona.com (player photos, club news), Google News, LiveSoccerTV and FanCode (where to watch in India) itself, with the same logic as the Worker, ported to Kotlin. It doesn't talk to the Worker.
 
-- **Widget** (resizable): live score and clock, or the next match with countdown and India channel; the larger sizes add the last result, form and league position. Tap to open the app.
-- **App**: overview, results and fixtures, the table, and a match centre (timeline, team stats, lineups on a pitch). Channel names open the broadcaster's own site.
+- **Design**: the web app's design system (UIUXmasterclass-skill): the same colour tokens in light and dark, Big Shoulders / Geist / Geist Mono bundled, Phosphor icons, the navy hero with the blaugrana edge.
+- **Widget** (resizable, always on the hero field): the next match with countdown and India channel, the live score and clock with Barça's scorers, or the full-time result for a few hours after the whistle; the larger size adds the last result, form, league position and the following fixture. Tap to open the app.
+- **App**: overview (hero, last result with scorers, form, leaders, table, fixtures, news), matches with competition filters, squad (official photos, position groups, sorting, a player sheet), the table, news from three sources, and a match centre (preview with head-to-head since 2020, timeline, mirrored team stats, lineups on a pitch). Channel names open the broadcaster's own site.
 - **Refreshing**: every 30 minutes in the background, and about every minute while a match is in its live window (75 minutes before kick-off until it ends). The latest data is saved on the phone, so the widget works offline.
 
 Build (needs JDK 17+ and the Android SDK):
@@ -123,7 +124,7 @@ cd android
 ./gradlew testDebugUnitTest -Proborazzi.test.record=true
 ```
 
-The tests use live data only: `LiveSourcesTest` runs the data layer against the real sources (every match involves Barcelona, goal events add up to the score, India TV found, snapshot saved and reloaded), and `ScreensTest` renders the real app screens and three widget sizes under Robolectric into `app/build/screens/`.
+The tests use live data only: `LiveSourcesTest` runs the data layer against the real sources (every match involves Barcelona, goal events add up to the score, India TV found, snapshot saved and reloaded), and `ScreensTest` renders every app screen (both themes) and three widget sizes under Robolectric into `app/build/screens/`.
 
 ## Design
 

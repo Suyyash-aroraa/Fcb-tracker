@@ -21,6 +21,10 @@ object Espn {
     const val RESULTS = "$SITE/all/teams/$FCB_ESPN_ID/schedule"
     const val FIXTURES = "$SITE/all/teams/$FCB_ESPN_ID/schedule?fixture=true"
 
+    const val SQUAD = "$SITE/esp.1/teams/$FCB_ESPN_ID/roster"
+    const val NEWS = "$SITE/esp.1/news?team=$FCB_ESPN_ID"
+    fun seasonUrl(year: Int) = "$RESULTS?season=$year"
+
     fun summaryUrl(m: Match) = "$SITE/${m.competition.slug ?: "all"}/summary?event=${m.id}"
 
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
@@ -229,5 +233,41 @@ object Espn {
             )
         }.sortedBy { if (it.rank > 0) it.rank else 99 }
         return Table(group["name"].str() ?: d["name"].str() ?: "LALIGA", rows)
+    }
+
+    fun parseSquad(data: String): List<Player> = json.parseToJsonElement(data)["athletes"].arr().map { a ->
+        val stats = HashMap<String, Int?>()
+        for (cat in a["statistics"]["splits"]["categories"].arr()) for (st in cat["stats"].arr()) stats[st["name"].str() ?: ""] = st["value"].int()
+        Player(
+            id = a["id"].str() ?: "",
+            name = a["displayName"].str() ?: "?",
+            short = a["shortName"].str(),
+            number = a["jersey"].str(),
+            pos = a["position"]["abbreviation"].str(),
+            posName = a["position"]["displayName"].str(),
+            age = a["age"].int(),
+            nationality = a["citizenship"].str(),
+            flag = a["flag"]["href"].str(),
+            headshot = a["headshot"]["href"].str(),
+            injured = a["injuries"].arr().isNotEmpty(),
+            stats = PlayerStats(
+                apps = stats["appearances"], subIns = stats["subIns"], goals = stats["totalGoals"], assists = stats["goalAssists"],
+                shots = stats["totalShots"], shotsOnTarget = stats["shotsOnTarget"], yellow = stats["yellowCards"], red = stats["redCards"],
+                fouls = stats["foulsCommitted"], saves = stats["saves"], conceded = stats["goalsConceded"],
+            ),
+        )
+    }
+
+    fun parseNews(data: String): List<NewsItem> = json.parseToJsonElement(data)["articles"].arr().mapNotNull { a ->
+        val link = a["links"]["web"]["href"].str() ?: return@mapNotNull null
+        NewsItem(
+            title = a["headline"].str() ?: return@mapNotNull null,
+            summary = a["description"].str(),
+            url = link,
+            image = a["images"].arr().firstNotNullOfOrNull { it["url"].str() },
+            source = "ESPN",
+            published = a["published"].str(),
+            origin = "espn",
+        )
     }
 }

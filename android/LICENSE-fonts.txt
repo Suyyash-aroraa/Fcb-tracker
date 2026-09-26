@@ -1,0 +1,4 @@
+Bundled fonts (app/src/main/res/font), all under the SIL Open Font License 1.1 (https://openfontlicense.org):
+- Big Shoulders Display, Copyright The Big Shoulders Project Authors (https://github.com/xotypeco/big_shoulders)
+- Geist and Geist Mono, Copyright Vercel (https://github.com/vercel/geist-font)
+Icons (app/src/main/res/drawable/ic_*.xml, except the launcher and widget preview) are Phosphor Icons, MIT: see LICENSE-phosphor-icons.txt.

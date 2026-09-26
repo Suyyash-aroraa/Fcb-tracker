@@ -22,6 +22,10 @@ class Repository(private val dir: File, private val http: Http = Http(), private
         val LIVE_BEFORE: Duration = Duration.ofMinutes(75) // lineups appear about an hour before
         val LIVE_AFTER: Duration = Duration.ofMinutes(210) // extra time and penalties run long
         val TV_EVERY: Duration = Duration.ofHours(6)
+        val SQUAD_EVERY: Duration = Duration.ofHours(6)
+        val NEWS_EVERY: Duration = Duration.ofMinutes(30)
+        const val HISTORY_FROM = "2020-01-01"
+        const val HISTORY_FIRST_SEASON = 2019
         const val TV_UPCOMING = 6
     }
 
@@ -63,6 +67,8 @@ class Repository(private val dir: File, private val http: Http = Http(), private
             Duration.between(parseInstant(s.tvCheckedAt) ?: Instant.EPOCH, clock()) > TV_EVERY ||
             s.upcoming.take(3).any { it.id !in s.tv }
         if (tvDue) s = tv(s, errors)
+        if (forceTv || due(s.squadCheckedAt, SQUAD_EVERY) || s.squad.isEmpty()) s = squad(s, errors)
+        if (forceTv || due(s.newsCheckedAt, NEWS_EVERY) || s.news.isEmpty()) s = news(s, errors)
         s = live(s)
         s = s.copy(updatedAt = clock().toString(), errors = errors + s.errors.filterKeys { it == "live" && it !in errors })
         save(s)
@@ -87,6 +93,65 @@ class Repository(private val dir: File, private val http: Http = Http(), private
                 .onFailure { out = out.copy(errors = out.errors + ("live" to (it.message ?: "failed"))) }
         }
         return out
+    }
+
+    private fun due(checked: String?, every: Duration) =
+        Duration.between(parseInstant(checked) ?: Instant.EPOCH, clock()) > every
+
+    /** ESPN's squad with season stats, with official photos and profile links from fcbarcelona.com. */
+    private suspend fun squad(s: Snapshot, errors: MutableMap<String, String>): Snapshot = coroutineScope {
+        val official = async { runCatching { Official.parsePlayers(http.text(Official.PLAYERS)) } }
+        val espn = runCatching { Espn.parseSquad(http.text(Espn.SQUAD)) }
+        val squad = espn.getOrElse { errors["squad"] = it.message ?: "failed"; return@coroutineScope s }
+        val photos = official.await().onFailure { errors["official"] = it.message ?: "failed" }.getOrDefault(emptyList())
+        s.copy(squad = Official.merge(squad, photos), squadCheckedAt = clock().toString())
+    }
+
+    /** News from the club's site, Google News and ESPN, newest first. */
+    private suspend fun news(s: Snapshot, errors: MutableMap<String, String>): Snapshot = coroutineScope {
+        val official = async { runCatching { Official.parseNews(http.text(Official.NEWS)) } }
+        val google = async { runCatching { GoogleNews.parse(http.text(GoogleNews.FEED_URL)) } }
+        val espn = async { runCatching { Espn.parseNews(http.text(Espn.NEWS)) } }
+        val lists = mapOf("official" to official.await(), "google" to google.await(), "espn" to espn.await())
+        lists.forEach { (k, r) -> r.onFailure { errors["news-$k"] = it.message ?: "failed" } }
+        if (lists.values.all { it.isFailure }) return@coroutineScope s
+        val club = lists.getValue("official").getOrDefault(emptyList())
+        // The club's own stories come straight from fcbarcelona.com; drop Google's copies of them.
+        val g = lists.getValue("google").getOrDefault(emptyList()).filter { !(club.isNotEmpty() && (it.source ?: "").lowercase().startsWith("fc barcelona")) }
+        val all = (club + g + lists.getValue("espn").getOrDefault(emptyList())).sortedByDescending { it.published ?: "" }
+        s.copy(news = all, newsCheckedAt = clock().toString())
+    }
+
+    // ---- head-to-head: completed matches of past seasons since HISTORY_FROM, fetched once per season
+
+    private val historyFile = File(dir, "history.json")
+
+    private fun seasonYear(now: Instant): Int {
+        val d = now.atZone(java.time.ZoneOffset.UTC)
+        return if (d.monthValue >= 7) d.year else d.year - 1
+    }
+
+    suspend fun history(): Map<String, List<Match>> = withContext(Dispatchers.IO) {
+        val ser = kotlinx.serialization.serializer<Map<String, List<Match>>>()
+        val stored = runCatching { Espn.json.decodeFromString(ser, historyFile.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+        val wanted = (HISTORY_FIRST_SEASON until seasonYear(clock())).map { it.toString() }
+        val missing = wanted.filter { it !in stored }
+        if (missing.isNotEmpty()) {
+            coroutineScope {
+                missing.map { y -> async { y to runCatching { Espn.parseMatches(http.text(Espn.seasonUrl(y.toInt())), "{}").first } } }
+                    .map { it.await() }
+            }.forEach { (y, r) -> r.onSuccess { ms -> stored[y] = ms.filter { it.status.completed && it.date >= HISTORY_FROM } } }
+            runCatching { dir.mkdirs(); historyFile.writeText(Espn.json.encodeToString(ser, stored)) }
+        }
+        stored
+    }
+
+    /** Every completed match against one opponent since HISTORY_FROM, newest first. */
+    suspend fun meetings(opponentId: String, exclude: String?): List<Match> {
+        val past = history().values.flatten()
+        val current = load()?.played.orEmpty()
+        return (past + current).filter { it.id != exclude && opponentId in listOf(it.home.id, it.away.id) }
+            .associateBy { it.id }.values.sortedByDescending { it.date }
     }
 
     private suspend fun tv(s: Snapshot, errors: MutableMap<String, String>): Snapshot {
@@ -141,6 +206,13 @@ class Repository(private val dir: File, private val http: Http = Http(), private
         val d = Espn.parseDetail(http.text(Espn.summaryUrl(m)), m)
         saveDetail(d)
         return d.copy(match = d.match.copy(tv = m.tv))
+    }
+
+    /** Any remote image (player photo, news picture), cached as a file named by its URL's hash. */
+    suspend fun image(url: String): File? = withContext(Dispatchers.IO) {
+        val f = File(dir, "images/${Integer.toHexString(url.hashCode())}-${url.length}")
+        if (f.length() > 0) return@withContext f
+        runCatching { f.parentFile?.mkdirs(); f.writeBytes(http.bytes(url)); f }.getOrNull()
     }
 
     // ---- crests, cached as files so the widget can draw them offline

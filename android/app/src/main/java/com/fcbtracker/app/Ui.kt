@@ -55,6 +55,13 @@ object Ui {
         else -> m.status.short ?: ""
     }
 
+    /** ESPN seasons start in July: a match in March 2024 belongs to 2023-24. */
+    fun season(m: Match): String {
+        val d = m.kickoff.atZone(java.time.ZoneOffset.UTC)
+        val y = if (d.monthValue >= 7) d.year else d.year - 1
+        return "$y-%02d".format((y + 1) % 100)
+    }
+
     fun ordinal(n: Int) = if (n % 100 in 11..13) "th" else when (n % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" }
 
     fun ago(iso: String?, now: Instant = Instant.now()): String {
@@ -64,6 +71,7 @@ object Ui {
             m < 1 -> "just now"
             m < 60 -> "$m min ago"
             m < 60 * 24 -> "${m / 60} h ago"
+            m < 60 * 48 -> "Yesterday"
             else -> "${m / 1440} days ago"
         }
     }

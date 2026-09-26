@@ -64,7 +64,13 @@ object Sync {
         )
     }
 
-    suspend fun refreshWidgets(context: Context) = FcbWidget().updateAll(context)
+    suspend fun refreshWidgets(context: Context) {
+        FcbWidget().updateAll(context)
+        if (android.os.Build.VERSION.SDK_INT >= 35) {
+            // Rate-limited by the system; a refused update keeps the previous preview.
+            runCatching { androidx.glance.appwidget.GlanceAppWidgetManager(context).setWidgetPreviews(com.fcbtracker.widget.FcbWidgetReceiver::class) }
+        }
+    }
 }
 
 class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
