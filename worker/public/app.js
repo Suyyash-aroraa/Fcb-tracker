@@ -26,7 +26,10 @@ class ApiError extends Error {
 }
 
 async function api(path) {
-  const res = await fetch(path, { headers: { accept: "application/json" } });
+  // The first request may already be in flight from index.html.
+  const pre = window.__prefetch;
+  if (pre && pre.path === path) window.__prefetch = null;
+  const res = await (pre && pre.path === path ? pre.res : fetch(path, { headers: { accept: "application/json" } }));
   let body = null;
   try { body = await res.json(); } catch { /* keep null */ }
   if (!res.ok) throw new ApiError(res.status, body);

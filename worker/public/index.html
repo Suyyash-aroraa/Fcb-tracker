@@ -14,6 +14,13 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="/styles.css">
   <script>
+    // Start this page's data request now, in parallel with loading app.js.
+    (function () {
+      var h = location.hash.replace(/^#\/?/, "").split("/");
+      var map = { "": "/api/overview", matches: "/api/matches", squad: "/api/squad", table: "/api/standings", news: "/api/news" };
+      var path = h[0] === "match" && /^\d+$/.test(h[1] || "") ? "/api/matches/" + h[1] : map[h[0] || ""];
+      if (path) window.__prefetch = { path: path, res: fetch(path, { headers: { accept: "application/json" } }) };
+    })();
     try { var t = localStorage.getItem("fcb-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
 </head>

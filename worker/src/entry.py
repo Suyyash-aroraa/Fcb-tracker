@@ -10,6 +10,7 @@ POST /api/ingest still accepts extra data from the optional command-line scraper
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -17,6 +18,8 @@ import re
 import time
 from urllib.parse import urlparse, parse_qs, quote
 
+from js import Object
+from pyodide.ffi import to_js
 from workers import Response, WorkerEntrypoint, fetch
 
 from fcb import FCB_ESPN_ID, pipeline
@@ -57,16 +60,35 @@ class HttpIO:
         return await (await self._get(url, "text/html,application/rss+xml;q=0.9,*/*;q=0.8")).text()
 
 
+# Reads are the main latency cost on a quiet site: a cold KV read goes to the central store.
+# Keep parsed values in the isolate for a few seconds, and let slow-changing keys sit in KV's edge
+# cache for longer. Matches and match details keep KV's default so live scores stay fresh.
+MEMORY_TTL = 15
+SLOW_KEYS = {"team": 300, "squad": 300, "standings": 300, "news": 300}
+_memory: dict[str, tuple[float, object]] = {}
+
+
 class KVStore:
     def __init__(self, kv):
         self.kv = kv
 
     async def get(self, key: str):
-        raw = await self.kv.get(key)
-        return json.loads(raw) if raw else None
+        hit = _memory.get(key)
+        if hit and hit[0] > time.time():
+            return hit[1]
+        ttl = SLOW_KEYS.get(key)
+        raw = await (self.kv.get(key, to_js({"cacheTtl": ttl}, dict_converter=Object.fromEntries)) if ttl else self.kv.get(key))
+        value = json.loads(raw) if raw else None
+        if value is not None:
+            _memory[key] = (time.time() + MEMORY_TTL, value)
+        return value
+
+    async def many(self, *keys: str) -> list:
+        return list(await asyncio.gather(*(self.get(k) for k in keys)))
 
     async def put(self, key: str, value) -> None:
         await self.kv.put(key, json.dumps(value, ensure_ascii=False))
+        _memory[key] = (time.time() + MEMORY_TTL, value)
 
 
 class Default(WorkerEntrypoint):
@@ -91,10 +113,9 @@ class Default(WorkerEntrypoint):
             return False
         return hmac.compare_digest(hashlib.sha256(token.encode()).digest(), hashlib.sha256(secret.encode()).digest())
 
-    async def _ensure_data(self) -> None:
-        """First request after a deploy: fetch everything before answering."""
-        if await self.store.get("matches") is None:
-            await pipeline.sync(self.io, self.store, force=True, bootstrap=True)
+    async def _fill(self) -> None:
+        """A read came back empty (fresh deploy or a new data type): fetch everything now."""
+        await pipeline.sync(self.io, self.store, force=True, bootstrap=True)
 
     def _refresh_live_in_background(self) -> None:
         global _last_live_refresh
@@ -107,10 +128,12 @@ class Default(WorkerEntrypoint):
 
     async def overview(self) -> Response:
         s = self.store
-        meta, team, matches, squad, standings, news = (
-            await s.get("meta"), await s.get("team"), await s.get("matches"),
-            await s.get("squad"), await s.get("standings"), await s.get("news"),
-        )
+        keys = ("meta", "team", "matches", "squad", "standings", "news")
+        values = await s.many(*keys)
+        if any(v is None for v in values):
+            await self._fill()
+            values = await s.many(*keys)
+        meta, team, matches, squad, standings, news = values
         if not matches:
             return respond({"error": "no-data", "message": "No data yet. The Worker is fetching it; try again in a moment."}, 503)
         matches = sorted(matches, key=lambda m: m.get("date") or "")
@@ -139,7 +162,10 @@ class Default(WorkerEntrypoint):
         }, max_age=5 if live else 60)
 
     async def listing(self, key: str) -> Response:
-        meta, data = await self.store.get("meta"), await self.store.get(key)
+        meta, data = await self.store.many("meta", key)
+        if data is None:
+            await self._fill()
+            meta, data = await self.store.many("meta", key)
         if data is None:
             return respond({"error": "no-data", "message": "No data yet. The Worker is fetching it; try again in a moment."}, 503)
         return respond({"meta": meta, key: data})
@@ -214,10 +240,8 @@ class Default(WorkerEntrypoint):
         if path == "/api/health":
             meta = await self.store.get("meta") or {}
             return respond({"ok": True, "updatedAt": meta.get("updatedAt"), "sources": meta.get("sources")}, max_age=0)
-        if path in ("/api/overview", "/api/matches", "/api/squad", "/api/standings", "/api/news") or path.startswith("/api/matches/"):
-            await self._ensure_data()
-            if path == "/api/overview" or path.startswith("/api/matches"):
-                self._refresh_live_in_background()
+        if path == "/api/overview" or path.startswith("/api/matches"):
+            self._refresh_live_in_background()
         if path == "/api/overview":
             return await self.overview()
         if path in ("/api/matches", "/api/squad", "/api/standings", "/api/news"):
