@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- navy disc with a gold ring and a gold "F" mark, inside the 66dp safe zone -->
+    <path android:fillColor="#0B1020" android:pathData="M54,24a30,30 0,1 1,0 60a30,30 0,1 1,0 -60z" />
+    <path android:fillColor="#EDBB00" android:pathData="M54,24a30,30 0,1 1,0 60a30,30 0,1 1,0 -60z M54,28a26,26 0,1 0,0 52a26,26 0,1 0,0 -52z" />
+    <path android:fillColor="#EDBB00" android:pathData="M45,40h20v6h-14v6h11v6h-11v10h-6z" />
+</vector>

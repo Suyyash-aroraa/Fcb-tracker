@@ -8,3 +8,4 @@ playwright-report/
 .venv-workers/
 python_modules/
 .ci-bin/
+dist/

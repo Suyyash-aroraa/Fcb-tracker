@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">FCB Tracker</string>
+    <string name="widget_name">FC Barcelona</string>
+    <string name="widget_description">Live score or next match, India TV, last result and form</string>
+</resources>

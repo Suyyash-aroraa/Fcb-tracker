@@ -4,6 +4,7 @@ FC Barcelona fixtures, results, lineups, match stats, squad, league table and ne
 
 ```
 worker/    Cloudflare Python Worker: scraping (src/fcb, Scrapling parser), KV API, frontend; runs only on request
+android/   Android app + home-screen widget that fetches everything on the phone itself (no server)
 scraper/   optional command-line runner of the same pipeline with Scrapling's fetchers (+ SofaScore)
 .claude/skills/UIUXmasterclass-skill/   design skill the frontend was built with
 ```
@@ -104,6 +105,25 @@ That's all: open the site and it fills itself, and visits keep it current. `npx 
 | `POST /api/ingest` | `Authorization: Bearer <INGEST_TOKEN>`, body `{"items": {"key": value}}` |
 | `POST /api/sync` | same auth; runs every sync step now |
 | `POST /api/live/refresh` | same auth; refreshes live fixtures now, or one Barcelona fixture `?event=` |
+
+## Android app and widget
+
+`android/` is a native Kotlin app (Jetpack Compose + a Glance home-screen widget) that does all the work on the phone: it downloads and parses ESPN (fixtures, live score, events, stats, lineups, table), LiveSoccerTV and FanCode (where to watch in India) itself, with the same logic as the Worker, ported to Kotlin. It doesn't talk to the Worker.
+
+- **Widget** (resizable): live score and clock, or the next match with countdown and India channel; the larger sizes add the last result, form and league position. Tap to open the app.
+- **App**: overview, results and fixtures, the table, and a match centre (timeline, team stats, lineups on a pitch). Channel names open the broadcaster's own site.
+- **Refreshing**: every 30 minutes in the background, and about every minute while a match is in its live window (75 minutes before kick-off until it ends). The latest data is saved on the phone, so the widget works offline.
+
+Build (needs JDK 17+ and the Android SDK):
+
+```bash
+cd android
+./gradlew assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease        # signed with keystore.properties if present, else the debug key
+./gradlew testDebugUnitTest -Proborazzi.test.record=true
+```
+
+The tests use live data only: `LiveSourcesTest` runs the data layer against the real sources (every match involves Barcelona, goal events add up to the score, India TV found, snapshot saved and reloaded), and `ScreensTest` renders the real app screens and three widget sizes under Robolectric into `app/build/screens/`.
 
 ## Design
 
