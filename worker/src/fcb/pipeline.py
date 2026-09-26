@@ -83,7 +83,8 @@ async def _details(io: IO, store: Store, status: dict, limit: int) -> dict:
     todo = []
     for m in reversed(done):  # newest first, so a partial run covers the most relevant games
         stored = await store.get(f"match:{m['id']}")
-        if not stored or not stored.get("match", {}).get("status", {}).get("completed"):
+        if (not stored or stored.get("v") != espn.DETAIL_VERSION
+                or not stored.get("match", {}).get("status", {}).get("completed")):
             todo.append(m)
     remaining = max(0, len(todo) - limit)
     todo = todo[:limit] + upcoming

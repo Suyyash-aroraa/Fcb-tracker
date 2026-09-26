@@ -40,6 +40,17 @@ test.describe("API", () => {
     }
   });
 
+  test("every played match's goal events add up to its score", async ({ request }) => {
+    // Headers, volleys, free kicks, penalties and own goals must all count as goals.
+    const { matches } = await (await request.get("/api/matches")).json();
+    for (const m of matches.filter((x: any) => x.status.state === "post")) {
+      const d = await (await request.get(`/api/matches/${m.id}`)).json();
+      if (!d.events.length) continue;
+      const goals = (side: string) => d.events.filter((e: any) => (e.kind === "goal" || e.kind === "own-goal") && e.side === side).length;
+      expect([goals("home"), goals("away")], `${m.home.name} ${m.home.score}-${m.away.score} ${m.away.name}`).toEqual([m.home.score, m.away.score]);
+    }
+  });
+
   test("rejects unauthenticated or malformed ingest", async ({ request }) => {
     expect((await request.post("/api/ingest", { data: { items: { team: {} } } })).status()).toBe(401);
     expect((await request.post("/api/ingest", { headers: { authorization: "Bearer wrong" }, data: { items: {} } })).status()).toBe(401);

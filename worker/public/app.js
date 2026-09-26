@@ -229,7 +229,8 @@ function heroMain(o) {
 function fcbGoals(detail) {
   if (!detail?.events) return [];
   const side = detail.match.fcbSide;
-  return detail.events.filter((e) => (e.kind === "goal" && e.side === side) || (e.kind === "own-goal" && e.side !== side));
+  // `side` is the side credited with the goal, own goals included.
+  return detail.events.filter((e) => (e.kind === "goal" || e.kind === "own-goal") && e.side === side);
 }
 
 function lastStats(d) {

@@ -22,7 +22,7 @@ from js import Object
 from pyodide.ffi import to_js
 from workers import Response, WorkerEntrypoint, fetch
 
-from fcb import FCB_ESPN_ID, pipeline
+from fcb import FCB_ESPN_ID, espn, pipeline
 
 KEY_PATTERN = re.compile(r"^(meta|team|matches|squad|standings|news|match:\d{1,12})$")
 LIVE_MIN_INTERVAL = 20  # seconds between viewer-triggered live refreshes, per isolate
@@ -142,7 +142,7 @@ class Default(WorkerEntrypoint):
         upcoming = [m for m in matches if m["status"].get("state") == "pre"]
         last = None
         if played:
-            last = await s.get(f"match:{played[-1]['id']}") or {"match": played[-1]}
+            last = await self._current(await s.get(f"match:{played[-1]['id']}")) or {"match": played[-1]}
 
         def leaders(key: str) -> list:
             ranked = [p for p in (squad or []) if (p["stats"].get(key) or 0) > 0]
@@ -170,8 +170,18 @@ class Default(WorkerEntrypoint):
             return respond({"error": "no-data", "message": "No data yet. The Worker is fetching it; try again in a moment."}, 503)
         return respond({"meta": meta, key: data})
 
+    async def _current(self, detail: dict | None) -> dict | None:
+        """Re-parse a stored match detail written by an older parser version, before serving it."""
+        if detail and detail.get("v") != espn.DETAIL_VERSION and detail.get("match"):
+            try:
+                detail = espn.parse_detail(await self.io.get_json(espn.summary_url(detail["match"])), detail["match"])
+                await self.store.put(f"match:{detail['match']['id']}", detail)
+            except Exception as exc:  # noqa: BLE001 - serve the old copy rather than nothing
+                print(f"re-parse of {detail['match'].get('id')} failed: {exc}")
+        return detail
+
     async def match_detail(self, match_id: str) -> Response:
-        detail = await self.store.get(f"match:{match_id}")
+        detail = await self._current(await self.store.get(f"match:{match_id}"))
         if detail:
             live = detail.get("match", {}).get("status", {}).get("state") == "in"
             return respond(detail, max_age=5 if live else 120)

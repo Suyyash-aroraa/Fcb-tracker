@@ -47,18 +47,31 @@ TEAM_STATS: list[tuple[str, str, str]] = [
     ("redCards", "Red cards", "count"),
 ]
 
-EVENT_KINDS = {
-    "goal": "goal",
-    "penalty---scored": "goal",
-    "own-goal": "own-goal",
-    "yellow-card": "yellow",
-    "red-card": "red",
-    "substitution": "sub",
-    "penalty---missed": "pen-miss",
-    "penalty---saved": "pen-miss",
-    "halftime": "period",
-    "end-regular-time": "period",
-}
+# Bump when parse_detail's output changes, so stored match details get re-fetched and re-parsed.
+DETAIL_VERSION = 2
+
+
+def _event_kind(ev: dict) -> str | None:
+    """Classify an ESPN key event. Goals come in many types (goal, goal---header, goal---volley,
+    goal---free-kick, penalty---scored, own-goal), so use ESPN's scoringPlay flag, not exact names."""
+    etype = (ev.get("type") or {}).get("type") or ""
+    if ev.get("shootout"):
+        return None  # shootout kicks are not match goals
+    if etype.startswith("own-goal") or (ev.get("scoringPlay") and "own goal" in (ev.get("text") or "").lower()):
+        return "own-goal"
+    if ev.get("scoringPlay") or etype.startswith("goal"):
+        return "goal"
+    if etype in ("penalty---missed", "penalty---saved"):
+        return "pen-miss"
+    if etype == "yellow-card":
+        return "yellow"
+    if "red-card" in etype:  # red-card, yellow-red-card (second yellow)
+        return "red"
+    if etype == "substitution":
+        return "sub"
+    if etype in ("halftime", "end-regular-time"):
+        return "period"
+    return None
 
 
 def _num(value: Any) -> float | None:
@@ -254,12 +267,12 @@ def _team_stats(boxscore: dict, home_id: str) -> list[dict]:
 def _events(key_events: list[dict], home_id: str) -> list[dict]:
     out = []
     for ev in key_events:
-        kind = EVENT_KINDS.get((ev.get("type") or {}).get("type") or "")
+        kind = _event_kind(ev)
         if kind is None:
             continue
         type_text = (ev.get("type") or {}).get("text") or ""
-        if kind == "goal" and "own goal" in (ev.get("text") or "").lower():
-            kind = "own-goal"
+        # For own goals ESPN's team is the team that benefits, so `side` is the side credited
+        # with the goal for every scoring event.
         team_id = str((ev.get("team") or {}).get("id") or "")
         players = [((p.get("athlete") or {}).get("displayName")) for p in ev.get("participants") or []]
         out.append({
@@ -271,7 +284,7 @@ def _events(key_events: list[dict], home_id: str) -> list[dict]:
             "side": ("home" if team_id == home_id else "away") if team_id else None,
             "players": [p for p in players if p],
             "text": ev.get("text"),
-            "penalty": "penalty" in type_text.lower(),
+            "penalty": "penalty" in type_text.lower() and kind == "goal",
         })
     return out
 
@@ -306,6 +319,7 @@ def parse_detail(summary: dict, match: dict) -> dict:
     ]
 
     return {
+        "v": DETAIL_VERSION,
         "match": match,
         "stats": _team_stats(summary.get("boxscore") or {}, home_id),
         "lineups": lineups,
