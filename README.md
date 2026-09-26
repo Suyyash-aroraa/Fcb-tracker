@@ -75,7 +75,7 @@ Playwright starts the Python Worker (`pywrangler dev`) on port 8788 with an empt
 
 ```bash
 cd worker
-npm run deploy                       # uv run pywrangler deploy; the KV namespace is provisioned automatically
+npm run deploy                       # uv run pywrangler deploy (KV namespace id is pinned in wrangler.jsonc)
 ```
 
 ### From the GitHub repo (Workers Builds)
