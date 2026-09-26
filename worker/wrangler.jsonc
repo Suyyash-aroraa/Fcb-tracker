@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fcb-tracker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-20",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // Omitting "id" lets `wrangler deploy` provision the namespace automatically.
+  // Local `wrangler dev` stores KV under .wrangler/state.
+  "kv_namespaces": [{ "binding": "FCB_DATA" }],
+  "observability": { "enabled": true }
+}

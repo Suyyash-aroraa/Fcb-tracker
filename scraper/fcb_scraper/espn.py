@@ -13,7 +13,6 @@ from .fetch import get_json
 
 SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 STANDINGS = "https://site.api.espn.com/apis/v2/sports/soccer/esp.1/standings"
-HEADSHOT = "https://a.espncdn.com/i/headshots/soccer/players/full/{id}.png"
 
 # Team stat keys worth showing, in display order. `pair` stats render as "a/b".
 TEAM_STATS: list[tuple[str, str, str]] = [
@@ -327,7 +326,7 @@ def fetch_squad() -> list[dict]:
             "age": a.get("age"),
             "nationality": a.get("citizenship"),
             "flag": (a.get("flag") or {}).get("href"),
-            "headshot": HEADSHOT.format(id=a.get("id")),
+            "headshot": (a.get("headshot") or {}).get("href"),
             "injured": bool(a.get("injuries")),
             "stats": {
                 "apps": stats.get("appearances"),
