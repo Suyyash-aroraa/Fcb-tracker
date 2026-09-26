@@ -109,6 +109,10 @@ test.describe("UI", () => {
     await expect(page.locator("footer")).toContainText("Scrapling");
     if (o.next?.tv?.channels?.length && !o.live) {
       await expect(page.locator("section.hero .watch")).toContainText(`Watch in India: ${o.next.tv.channels.join(", ")}`);
+      // Channel names open the broadcasters' own sites, never the listings site.
+      for (const href of await page.locator("section.hero .watch a").evaluateAll((as) => as.map((a) => a.getAttribute("href")))) {
+        expect(href).toMatch(/^https:\/\/(www\.)?(fancode\.com|sonyliv\.com|jio\.com|jiocinema\.com|hotstar\.com)\//);
+      }
     }
     await noHorizontalScroll(page);
     await noDashes(page);

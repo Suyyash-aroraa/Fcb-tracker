@@ -202,13 +202,30 @@ function countdownCells(iso) {
   </div>`;
 }
 
-/* Where to watch in India (LiveSoccerTV listings, see worker/src/fcb/tv.py). */
+/* Where to watch in India (see worker/src/fcb/tv.py). Each channel links to its own site;
+   when FanCode itself listed the fixture, FanCode links straight to that match. */
+const CHANNEL_SITES = {
+  "fancode": "https://www.fancode.com/football",
+  "sony liv": "https://www.sonyliv.com/",
+  "sonyliv": "https://www.sonyliv.com/",
+  "jiotv": "https://www.jio.com/apps/jiotv/",
+  "jiocinema": "https://www.jiocinema.com/",
+  "jiohotstar": "https://www.hotstar.com/in",
+  "disney+ hotstar": "https://www.hotstar.com/in",
+};
+function channelLink(name, t) {
+  const key = name.toLowerCase().trim();
+  if (key === "fancode" && t.source === "FanCode" && safeUrl(t.url)) return t.url;
+  return CHANNEL_SITES[key] || null;
+}
 function watchIndia(m, long = true) {
   const t = m.tv;
   if (!t || !t.channels?.length) return "";
-  const names = t.channels.join(", ");
-  const link = safeUrl(t.url);
-  return html`<span class="watch">${icon("television-simple")}${long ? "Watch in India: " : ""}${link ? html`<a href="${link}" target="_blank" rel="noopener noreferrer">${names}</a>` : names}</span>`;
+  const links = t.channels.map((name, i) => {
+    const href = channelLink(name, t);
+    return html`${i ? ", " : ""}${href ? html`<a href="${href}" target="_blank" rel="noopener noreferrer">${name}</a>` : name}`;
+  });
+  return html`<span class="watch">${icon("television-simple")}${long ? "Watch in India: " : ""}${links}</span>`;
 }
 
 function matchMeta(m) {
