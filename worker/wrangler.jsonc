@@ -12,8 +12,10 @@
   },
   // The existing "fcb-tracker-fcb-data" namespace. Local `pywrangler dev` stores KV under .wrangler/state.
   "kv_namespaces": [{ "binding": "FCB_DATA", "id": "2e67e3f3dfef4430bc6f779ab8f1413d" }],
-  // Every minute: follow live matches, and run whichever sync steps are due (see src/fcb/pipeline.py).
-  "triggers": { "crons": ["* * * * *"] },
+  // No cron: the Worker only runs while someone uses the site. It refreshes stale data in the
+  // background on request (see src/entry.py). An empty list removes any previously deployed cron;
+  // to refresh without visitors use e.g. ["*/30 * * * *"].
+  "triggers": { "crons": [] },
   // Workers Paid: allow a full sync (every source, every match summary) in one invocation.
   "limits": { "cpu_ms": 60000 },
   "observability": { "enabled": true }

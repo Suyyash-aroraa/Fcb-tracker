@@ -13,7 +13,7 @@ scraper/   optional command-line runner of the same pipeline with Scrapling's fe
 Everything runs in one **Cloudflare Python Worker** (`worker/`). There is no separate scraper to run.
 
 - **Scraping** happens inside the Worker. `worker/src/fcb/` parses every source with Scrapling's `Selector` (Scrapling's parser runs in Python Workers via Pyodide; lxml and orjson ship as Pyodide packages), and downloads with the Workers runtime `fetch`.
-- **A cron trigger runs every minute.** It follows live matches, then runs every sync step that is due: fixtures, match details, table, squad and news. Each refreshes every 30 minutes (the squad every 6 hours).
+- **It only runs while someone uses the site.** There is no cron. Requests are answered from KV straight away; if any data is older than its refresh interval (30 minutes; the squad 6 hours), the Worker re-scrapes it in the background after answering, and the page re-fetches itself a few seconds later.
 - **A fresh deploy fills itself.** The first request to an empty store runs a full sync (every source, every match summary of the season) before answering, about 3 seconds.
 - **Every source reports its own status** in `/api/health` and the page footer, so a site that blocks Cloudflare shows up straight away.
 
@@ -35,8 +35,7 @@ Built for **Workers Paid**: `wrangler.jsonc` sets `limits.cpu_ms` to 60 s so a f
 
 ## Live matches
 
-- **The cron checks every minute.** While a fixture is in its live window (75 minutes before kick-off, so lineups appear, until the match ends), it pulls ESPN's live summary: clock, score, goals, cards, subs, team stats and lineups. It writes to KV only when something changed.
-- **Viewers pull updates in.** Requests for the overview or a match trigger a background refresh at most every 20 seconds, and an open match page polls every 15 seconds while live.
+- **Viewers pull updates in.** While a fixture is in its live window (75 minutes before kick-off, so lineups appear, until the match ends), requests for the overview or a match trigger a refresh from ESPN's live summary (clock, score, goals, cards, subs, team stats, lineups) at most every 20 seconds. An open match page polls every 15 seconds while live. KV is written only when something changed.
 - **LiveScore is the fallback** for score and clock if ESPN fails.
 - `POST /api/live/refresh[?event=<id>]` (with the token) refreshes live fixtures now, or one Barcelona fixture. Other teams' matches are refused.
 
@@ -49,7 +48,6 @@ cd worker
 npm install
 echo "INGEST_TOKEN=$(openssl rand -hex 24)" > .dev.vars
 npm run dev                                  # uv run pywrangler dev, http://127.0.0.1:8787
-curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=*+*+*+*+*"   # run one cron tick
 ```
 
 The optional command-line scraper (SofaScore enrichment, or writing JSON files):

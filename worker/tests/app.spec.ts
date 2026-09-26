@@ -51,6 +51,21 @@ test.describe("API", () => {
     }
   });
 
+  test("stale data is re-scraped in the background when someone visits (no cron)", async ({ request }) => {
+    const auth = { authorization: `Bearer ${process.env.E2E_INGEST_TOKEN}` };
+    const meta = (await (await request.get("/api/overview")).json()).meta;
+    const old = "2020-01-01T00:00:00+00:00";
+    const stale = { ...meta, sync: Object.fromEntries(Object.keys(meta.sync).map((k) => [k, old])) };
+    expect((await request.post("/api/ingest", { headers: auth, data: { items: { meta: stale } } })).status()).toBe(200);
+
+    const first = await (await request.get("/api/overview")).json();
+    expect(first.refreshing, "a visit to stale data starts a background refresh").toBe(true);
+    await expect.poll(async () => (await (await request.get("/api/health")).json()).updatedAt, { timeout: 60_000 })
+      .not.toBe(meta.updatedAt);
+    const after = (await (await request.get("/api/overview")).json()).meta;
+    for (const step of Object.keys(meta.sync)) expect(after.sync[step]).not.toBe(old);
+  });
+
   test("rejects unauthenticated or malformed ingest", async ({ request }) => {
     expect((await request.post("/api/ingest", { data: { items: { team: {} } } })).status()).toBe(401);
     expect((await request.post("/api/ingest", { headers: { authorization: "Bearer wrong" }, data: { items: {} } })).status()).toBe(401);

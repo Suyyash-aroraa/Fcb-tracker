@@ -1,9 +1,10 @@
 """FCB Tracker, a Cloudflare Python Worker.
 
-The Worker does everything itself:
+The Worker does everything itself, and only while someone is using the site (no cron):
   * serves the frontend (static assets) and a JSON API from KV,
-  * syncs ESPN, fcbarcelona.com and Google News on a cron, parsing with Scrapling (fcb/),
-  * follows Barcelona's live matches every minute, and on demand while people watch,
+  * answers from stored data at once; when data is older than its refresh interval it re-scrapes
+    ESPN, fcbarcelona.com and Google News in the background (parsing with Scrapling, fcb/),
+  * follows Barcelona's live matches every ~20 s while people have the site open,
   * fills an empty store on the first request after a deploy.
 POST /api/ingest still accepts extra data from the optional command-line scraper (SofaScore).
 """
@@ -26,9 +27,12 @@ from fcb import FCB_ESPN_ID, espn, pipeline
 
 KEY_PATTERN = re.compile(r"^(meta|team|matches|squad|standings|news|match:\d{1,12})$")
 LIVE_MIN_INTERVAL = 20  # seconds between viewer-triggered live refreshes, per isolate
+SYNC_RETRY_AFTER = 30  # seconds before retrying a background sync that failed
 USER_AGENT = "fcb-tracker/1.0 (+Cloudflare Worker)"
 
 _last_live_refresh = 0.0
+_sync_running = False
+_sync_failed_at = 0.0
 
 
 def respond(body, status: int = 200, max_age: int = 60) -> Response:
@@ -117,6 +121,28 @@ class Default(WorkerEntrypoint):
         """A read came back empty (fresh deploy or a new data type): fetch everything now."""
         await pipeline.sync(self.io, self.store, force=True, bootstrap=True)
 
+    def _refresh_stale_in_background(self, meta: dict | None) -> bool:
+        """Stale-while-revalidate: if any data is past its refresh interval, re-scrape it after
+        answering. Returns True when a refresh was started, so the page can re-fetch shortly."""
+        global _sync_running
+        if not pipeline.due_steps(meta) or _sync_running or time.time() - _sync_failed_at < SYNC_RETRY_AFTER:
+            return False
+        _sync_running = True
+        self.ctx.waitUntil(self._background_sync())
+        return True
+
+    async def _background_sync(self) -> None:
+        global _sync_running, _sync_failed_at
+        try:
+            result = await pipeline.sync(self.io, self.store)
+            if any("error" in (r or {}) for r in (result.get("results") or {}).values()):
+                _sync_failed_at = time.time()
+        except Exception as exc:  # noqa: BLE001
+            print(f"background sync failed: {exc}")
+            _sync_failed_at = time.time()
+        finally:
+            _sync_running = False
+
     def _refresh_live_in_background(self) -> None:
         global _last_live_refresh
         if time.time() - _last_live_refresh < LIVE_MIN_INTERVAL:
@@ -134,6 +160,7 @@ class Default(WorkerEntrypoint):
             await self._fill()
             values = await s.many(*keys)
         meta, team, matches, squad, standings, news = values
+        refreshing = self._refresh_stale_in_background(meta)
         if not matches:
             return respond({"error": "no-data", "message": "No data yet. The Worker is fetching it; try again in a moment."}, 503)
         matches = sorted(matches, key=lambda m: m.get("date") or "")
@@ -154,7 +181,7 @@ class Default(WorkerEntrypoint):
         start = max(0, min(idx - 2, len(rows) - 5))
         around = rows[start:start + 5] if idx >= 0 else rows[:5]
         return respond({
-            "meta": meta, "team": team, "live": live, "next": upcoming[0] if upcoming else None, "last": last,
+            "meta": meta, "refreshing": refreshing, "team": team, "live": live, "next": upcoming[0] if upcoming else None, "last": last,
             "form": list(reversed(played[-5:])), "upcoming": upcoming[:5],
             "standings": {"league": standings.get("league"), "rows": around, "position": rows[idx] if idx >= 0 else None} if standings else None,
             "leaders": {"goals": leaders("goals"), "assists": leaders("assists")},
@@ -168,7 +195,7 @@ class Default(WorkerEntrypoint):
             meta, data = await self.store.many("meta", key)
         if data is None:
             return respond({"error": "no-data", "message": "No data yet. The Worker is fetching it; try again in a moment."}, 503)
-        return respond({"meta": meta, key: data})
+        return respond({"meta": meta, "refreshing": self._refresh_stale_in_background(meta), key: data})
 
     async def _current(self, detail: dict | None) -> dict | None:
         """Re-parse a stored match detail written by an older parser version, before serving it."""
@@ -272,7 +299,8 @@ class Default(WorkerEntrypoint):
         return await self.env.ASSETS.fetch(request)
 
     async def scheduled(self, controller, env, ctx):
-        # Every minute: follow live matches, then run every sync step that is due.
+        # Not triggered by default (no cron in wrangler.jsonc: the Worker only runs while the site
+        # is in use). Add a cron trigger to keep data fresh without visitors.
         live = await pipeline.refresh_live(self.io, self.store)
         result = await pipeline.sync(self.io, self.store)
         if live or result.get("ran"):

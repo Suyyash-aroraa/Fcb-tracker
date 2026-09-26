@@ -23,6 +23,6 @@ setup("the Worker fills an empty store by scraping every source itself", async (
   }
   console.log("sources:", JSON.stringify(o.meta.sources));
 
-  // The real cron handler runs cleanly on a full store.
-  expect((await request.get("/cdn-cgi/local/scheduled?cron=*+*+*+*+*")).ok()).toBe(true);
+  // Fresh data: a second request must not start another background refresh.
+  expect((await (await request.get("/api/overview")).json()).refreshing).toBe(false);
 });

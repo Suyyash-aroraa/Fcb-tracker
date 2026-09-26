@@ -142,6 +142,15 @@ async def _news(io: IO, store: Store, status: dict) -> dict:
     return {"articles": len(news)}
 
 
+def due_steps(meta: dict | None, now: datetime | None = None) -> list[str]:
+    """Steps whose data is older than their refresh interval (or has backfill work left)."""
+    meta = meta or {}
+    last, now = meta.get("sync") or {}, now or _now()
+    pending = set(meta.get("pending") or [])
+    return [s for s, every in STEPS.items()
+            if s in pending or not (_parse(last.get(s)) and now - _parse(last[s]) < timedelta(seconds=every))]
+
+
 async def sync(io: IO, store: Store, *, force: bool = False, bootstrap: bool = False, only: list[str] | None = None,
                max_steps: int | None = None, details_per_run: int = 1000, log: Callable[[str], None] = print) -> dict:
     """Run the steps that are due (all of them with force) and update meta.
@@ -154,8 +163,7 @@ async def sync(io: IO, store: Store, *, force: bool = False, bootstrap: bool = F
     last = meta.get("sync") or {}
     now = _now()
     pending = set(meta.get("pending") or [])  # steps with backfill work left (match details)
-    due = [s for s, every in STEPS.items()
-           if force or s in pending or not (_parse(last.get(s)) and now - _parse(last[s]) < timedelta(seconds=every))]
+    due = list(STEPS) if force else due_steps(meta, now)
     if only is not None:
         due = [s for s in due if s in only]
     if max_steps is not None:

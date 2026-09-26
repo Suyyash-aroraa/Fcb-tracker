@@ -33,8 +33,14 @@ async function api(path) {
   let body = null;
   try { body = await res.json(); } catch { /* keep null */ }
   if (!res.ok) throw new ApiError(res.status, body);
+  // The Worker re-scrapes stale data in the background after answering; re-fetch once when done.
+  if (body && body.refreshing && !autoRefreshed) {
+    autoRefreshed = true;
+    setTimeout(() => route(), 5000);
+  }
   return body;
 }
+let autoRefreshed = false;
 
 /* ---------------- Formatting ---------------- */
 
@@ -783,6 +789,6 @@ async function route() {
 }
 
 main.addEventListener("click", (e) => { if (e.target.closest('[data-action="retry"]')) route(); });
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => { autoRefreshed = false; route(); });
 paintThemeButton();
 route();
