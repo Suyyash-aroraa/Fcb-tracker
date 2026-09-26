@@ -1,7 +1,7 @@
-"""ESPN adapter: fixtures, results, match summaries, squad and standings.
+"""ESPN: fixtures and results in every competition, match summaries, squad, table and news.
 
-ESPN's site API is fetched with Scrapling's impersonating `Fetcher`, since a plain
-HTTP client gets an Akamai 403. Everything is normalised into the app's own schema.
+Pure parsing: every function takes an already-downloaded ESPN JSON payload and returns the app's
+schema. `urls` says what to download, so the Worker and the command-line scraper share this code.
 """
 
 from __future__ import annotations
@@ -9,10 +9,22 @@ from __future__ import annotations
 from typing import Any
 
 from . import FCB_ESPN_ID
-from .fetch import get_json
 
-SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
-STANDINGS = "https://site.api.espn.com/apis/v2/sports/soccer/esp.1/standings"
+SITE = "https://site.web.api.espn.com/apis/site/v2/sports/soccer"
+STANDINGS = "https://site.web.api.espn.com/apis/v2/sports/soccer/esp.1/standings"
+
+URLS = {
+    "team": f"{SITE}/esp.1/teams/{FCB_ESPN_ID}",
+    "results": f"{SITE}/all/teams/{FCB_ESPN_ID}/schedule",
+    "fixtures": f"{SITE}/all/teams/{FCB_ESPN_ID}/schedule?fixture=true",
+    "squad": f"{SITE}/esp.1/teams/{FCB_ESPN_ID}/roster",
+    "standings": STANDINGS,
+    "news": f"{SITE}/esp.1/news?team={FCB_ESPN_ID}",
+}
+
+
+def summary_url(match: dict) -> str:
+    return f"{SITE}/{match['competition'].get('slug') or 'all'}/summary?event={match['id']}"
 
 # Team stat keys worth showing, in display order. `pair` stats render as "a/b".
 TEAM_STATS: list[tuple[str, str, str]] = [
@@ -107,13 +119,13 @@ def _status(status: dict) -> dict:
     }
 
 
-def normalize_event(event: dict) -> dict:
+def normalize_event(event: dict, team_id: str = FCB_ESPN_ID) -> dict:
     comp = (event.get("competitions") or [{}])[0]
     competitors = comp.get("competitors") or []
     home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0] if competitors else {})
     away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[-1] if competitors else {})
     home_ref, away_ref = _team_ref(home), _team_ref(away)
-    fcb_side = "home" if home_ref["id"] == FCB_ESPN_ID else "away"
+    fcb_side = "home" if home_ref["id"] == team_id else "away"
     status = _status(comp.get("status") or event.get("status") or {})
 
     result = None
@@ -155,8 +167,8 @@ def normalize_event(event: dict) -> dict:
     }
 
 
-def fetch_team() -> dict:
-    team = get_json(f"{SITE}/esp.1/teams/{FCB_ESPN_ID}")["team"]
+def parse_team(data: dict) -> dict:
+    team = data["team"]
     logo, logo_dark = _logos(team)
     record = ((team.get("record") or {}).get("items") or [{}])[0]
     return {
@@ -173,10 +185,8 @@ def fetch_team() -> dict:
     }
 
 
-def fetch_matches() -> tuple[list[dict], str | None]:
+def parse_matches(results: dict, fixtures: dict) -> tuple[list[dict], str | None]:
     """All competitions: completed results plus upcoming fixtures, de-duplicated and sorted by date."""
-    results = get_json(f"{SITE}/all/teams/{FCB_ESPN_ID}/schedule")
-    fixtures = get_json(f"{SITE}/all/teams/{FCB_ESPN_ID}/schedule?fixture=true")
     season = (results.get("season") or {}).get("displayName")
     by_id: dict[str, dict] = {}
     for payload in (results, fixtures):
@@ -266,9 +276,8 @@ def _events(key_events: list[dict], home_id: str) -> list[dict]:
     return out
 
 
-def fetch_match_detail(match: dict) -> dict:
+def parse_detail(summary: dict, match: dict) -> dict:
     slug = match["competition"].get("slug") or "all"
-    summary = get_json(f"{SITE}/{slug}/summary?event={match['id']}")
     header = ((summary.get("header") or {}).get("competitions") or [{}])[0]
     home_id = match["home"]["id"]
 
@@ -307,8 +316,7 @@ def fetch_match_detail(match: dict) -> dict:
     }
 
 
-def fetch_squad() -> list[dict]:
-    data = get_json(f"{SITE}/esp.1/teams/{FCB_ESPN_ID}/roster")
+def parse_squad(data: dict) -> list[dict]:
     squad = []
     for a in data.get("athletes") or []:
         stats: dict[str, int | None] = {}
@@ -345,8 +353,7 @@ def fetch_squad() -> list[dict]:
     return squad
 
 
-def fetch_standings() -> dict:
-    data = get_json(STANDINGS)
+def parse_standings(data: dict) -> dict:
     group = (data.get("children") or [{}])[0]
     rows = []
     for entry in (group.get("standings") or {}).get("entries") or []:
@@ -376,8 +383,7 @@ def fetch_standings() -> dict:
     return {"league": group.get("name") or data.get("name"), "season": (group.get("standings") or {}).get("seasonDisplayName"), "rows": rows}
 
 
-def fetch_news() -> list[dict]:
-    data = get_json(f"{SITE}/esp.1/news?team={FCB_ESPN_ID}")
+def parse_news(data: dict) -> list[dict]:
     out = []
     for a in data.get("articles") or []:
         link = ((a.get("links") or {}).get("web") or {}).get("href")

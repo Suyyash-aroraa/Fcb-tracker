@@ -30,7 +30,7 @@ test.describe("API", () => {
   test("serves scraped data", async ({ request }) => {
     const o = await (await request.get("/api/overview")).json();
     expect(o.team.name).toBe("Barcelona");
-    expect(o.meta.scraper).toBe("scrapling");
+    expect(o.meta.scraper).toMatch(/Scrapling/);
     expect(Array.isArray(o.form)).toBe(true);
     const { matches } = await (await request.get("/api/matches")).json();
     expect(matches.length).toBeGreaterThan(5);
@@ -49,6 +49,7 @@ test.describe("API", () => {
     });
     expect(bad.status()).toBe(400);
     expect((await request.get("/api/ingest")).status()).toBe(405);
+    expect((await request.post("/api/sync")).status()).toBe(401);
     expect((await request.get("/api/matches/999999999999")).status()).toBe(404);
     expect((await request.get("/api/nope")).status()).toBe(404);
   });

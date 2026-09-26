@@ -1,55 +1,64 @@
 # FCB Tracker
 
-FC Barcelona fixtures, results, lineups, match stats, squad, league table and news. A Cloudflare Worker serves the app, and the data is scraped with [Scrapling](https://github.com/D4Vinci/Scrapling).
+FC Barcelona fixtures, results, lineups, match stats, squad, league table and news. A Cloudflare Python Worker scrapes the data with [Scrapling](https://github.com/D4Vinci/Scrapling), stores it in KV and serves the app.
 
 ```
-scraper/   Python + Scrapling: ESPN, fcbarcelona.com, Google News, SofaScore  ->  POST /api/ingest
-worker/    Cloudflare Worker: KV-backed JSON API + static frontend (no build step)
+worker/    Cloudflare Python Worker: scraping (src/fcb, Scrapling parser), cron, KV API, frontend
+scraper/   optional command-line runner of the same pipeline with Scrapling's fetchers (+ SofaScore)
 .claude/skills/UIUXmasterclass-skill/   design skill the frontend was built with
 ```
 
 ## How it fits together
 
-Scrapling is a Python library (curl_cffi impersonation plus a patched Chromium), so it cannot run inside a Worker. The scraper runs wherever Python runs (your machine, or the included GitHub Actions cron) and pushes normalised JSON to the Worker, which stores it in KV and serves it.
+Everything runs in one **Cloudflare Python Worker** (`worker/`). There is no separate scraper to run.
 
-| Source | How it's scraped | What it provides |
-|---|---|---|
-| ESPN site API | Scrapling `Fetcher` with Chrome impersonation (plain clients get an Akamai 403) | Fixtures and results across all competitions, match summaries (team stats, lineups + formations, key events, officials, attendance), squad season stats, LALIGA table, ESPN news |
-| fcbarcelona.com (official site) | Scrapling `Fetcher` + CSS selectors on the server-rendered pages | Official player photos and profile links (merged into the squad), first-team news |
-| Google News | Scrapling `Fetcher` on the Google News RSS feed. Google Search itself returns a JS redirect or `/sorry` CAPTCHA to datacenter traffic | Last 7 days of FC Barcelona headlines from many publishers |
-| SofaScore | Scrapling `StealthyFetcher` opens the team page and calls SofaScore's own API from inside it | Player ratings and xG, merged into ESPN match details |
+- **Scraping** happens inside the Worker. `worker/src/fcb/` parses every source with Scrapling's `Selector` (Scrapling's parser runs in Python Workers via Pyodide; lxml and orjson ship as Pyodide packages), and downloads with the Workers runtime `fetch`.
+- **A cron trigger runs every minute.** It follows live matches, and otherwise runs the most overdue sync step, one step per minute: fixtures, match details, table, squad and news. Each refreshes every 30 minutes (the squad every 6 hours).
+- **A fresh deploy fills itself.** The first request to an empty store fetches the fixtures inline; the cron fills in the rest over the next few minutes.
+- **Every source reports its own status** in `/api/health` and the page footer, so a site that blocks Cloudflare shows up straight away.
 
-SofaScore blocks many datacenter IP ranges outright (its edge returns 403 to every client). From those networks, set `SCRAPER_PROXY` to a residential proxy or run the scraper from a home connection. Without it the app still works, and the footer shows SofaScore as unavailable.
+| Source | What it provides |
+|---|---|
+| ESPN public JSON | Fixtures and results in every competition, match summaries (team stats, lineups and formations, key events, officials, attendance), squad season stats, LALIGA table, ESPN news |
+| fcbarcelona.com (official site) | Official player photos and profile links (merged into the squad), first-team news |
+| Google News RSS | The last week of headlines from many publishers. Google Search itself returns a CAPTCHA to datacenter traffic |
+| LiveScore public feed | Live score and clock if ESPN fails during a match |
+| SofaScore (optional) | Player ratings and xG. Needs Scrapling's stealth browser and a residential connection, so only the optional command-line scraper can add it |
+
+### What Scrapling does where
+
+Scrapling has two halves. Its **parser** runs inside the Worker. Its **fetchers** (curl_cffi browser impersonation and the stealth Chrome) need native networking and a browser, which Python Workers don't have, so the Worker downloads with `fetch` instead. None of the sources above need impersonation. The optional command-line scraper (`scraper/`) runs the same pipeline with Scrapling's fetchers and can push SofaScore data to the Worker's `/api/ingest`.
+
+### Plan limits
+
+Workers Free allows **10 ms of CPU per invocation**. Parsing counts toward it; waiting on the network doesn't. The Worker keeps each cron run to one step to stay small, but parsing ESPN's JSON in Python can still exceed 10 ms. If the dashboard shows `Exceeded CPU Time Limits` (Error 1102), use Workers Paid ($5/month, 30 s CPU per invocation).
 
 ## Live matches
 
-Scrapling can't run inside a Worker, so during a match the Worker fetches live data itself (`worker/src/live.ts`):
-
-- A **cron trigger runs every minute**. It does nothing unless a fixture is in its live window (75 minutes before kick-off, so lineups appear, until the match ends). Inside the window it pulls ESPN's live summary (clock, score, goals, cards, subs, team stats, lineups) and writes it to KV only when something changed.
-- **Viewers pull updates in.** Requests for the overview or a match trigger a background refresh at most every 20 seconds, so an open match page (which polls every 15 seconds while live) stays within seconds of ESPN.
-- **LiveScore is the fallback.** If ESPN fails, LiveScore's public feed supplies the score and clock.
-- `POST /api/live/refresh[?event=<id>]` (with the ingest token) refreshes live fixtures now, or one Barcelona fixture. Other teams' matches are refused.
+- **The cron checks every minute.** While a fixture is in its live window (75 minutes before kick-off, so lineups appear, until the match ends), it pulls ESPN's live summary: clock, score, goals, cards, subs, team stats and lineups. It writes to KV only when something changed.
+- **Viewers pull updates in.** Requests for the overview or a match trigger a background refresh at most every 20 seconds, and an open match page polls every 15 seconds while live.
+- **LiveScore is the fallback** for score and clock if ESPN fails.
+- `POST /api/live/refresh[?event=<id>]` (with the token) refreshes live fixtures now, or one Barcelona fixture. Other teams' matches are refused.
 
 ## Run locally
 
-```bash
-# 1. Scraper
-python3 -m venv .venv
-.venv/bin/pip install -r scraper/requirements.txt
-.venv/bin/scrapling install          # Chromium for StealthyFetcher (SofaScore)
+Needs [uv](https://docs.astral.sh/uv/) 0.12.3+ and Node 22+.
 
-# 2. Worker
+```bash
 cd worker
 npm install
 echo "INGEST_TOKEN=$(openssl rand -hex 24)" > .dev.vars
-npm run dev                          # http://127.0.0.1:8787
-
-# 3. Fill it (in another shell, from the repo root)
-cd scraper
-INGEST_TOKEN=<same token> ../.venv/bin/python -m fcb_scraper --push http://127.0.0.1:8787
+npm run dev                                  # uv run pywrangler dev, http://127.0.0.1:8787
+curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=*+*+*+*+*"   # run one cron tick
 ```
 
-Scraper flags: `--out DIR` writes the JSON files instead of (or as well as) pushing, `--skip espn|official|google|sofascore` skips a source, and `--recent N` sets how many completed matches get full detail (default 12).
+The optional command-line scraper (SofaScore enrichment, or writing JSON files):
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r scraper/requirements.txt
+cd scraper && ../.venv/bin/python -m fcb_scraper --out ../data
+INGEST_TOKEN=<token> ../.venv/bin/python -m fcb_scraper --push https://<worker> --sofascore
+```
 
 ## End-to-end tests
 
@@ -60,17 +69,16 @@ npm run test:e2e
 
 If your sandbox lets command-line tools out through a proxy but gives wrangler's local runtime no internet access, run `python3 worker/scripts/dev-egress-relay.py` and set `E2E_FETCH_RELAY=http://127.0.0.1:8798`.
 
-Playwright starts `wrangler dev` on port 8788, runs the real Scrapling scraper against it (no fixtures or mock data), then checks every view against the API in desktop and mobile Chromium. The checks cover the API and ingest auth, the overview, results and filters, the match centre tabs (timeline, stats, lineups, keyboard tab navigation), fixtures and the pre-match preview, squad sorting, the table, news filters, theme persistence, the not-found state, no horizontal scroll, and no em/en dashes in the copy.
+Playwright starts the Python Worker (`pywrangler dev`) on port 8788 with an empty store. The bootstrap step checks that the first request fills it and drives the real cron handler until every source has synced (no fixtures or mock data). The suites then check every view against the API in desktop and mobile Chromium. The checks cover the API and ingest auth, the overview, results and filters, the match centre tabs (timeline, stats, lineups, keyboard tab navigation), fixtures and the pre-match preview, squad sorting, the table, news filters, theme persistence, the not-found state, no horizontal scroll, and no em/en dashes in the copy.
 
 ## Deploy
 
 ```bash
 cd worker
-npx wrangler deploy                  # the KV namespace is provisioned automatically
-npx wrangler secret put INGEST_TOKEN
+npm run deploy                       # uv run pywrangler deploy; the KV namespace is provisioned automatically
 ```
 
-Then add the repository secrets `WORKER_URL`, `INGEST_TOKEN` and, optionally, `SCRAPER_PROXY`. `.github/workflows/scrape.yml` refreshes the data every 30 minutes.
+That's all: open the site and it fills itself, then the cron keeps it current. `npx wrangler secret put INGEST_TOKEN` is only needed for the token-protected endpoints (`/api/sync`, `/api/live/refresh`, `/api/ingest`).
 
 ## API
 
@@ -81,6 +89,7 @@ Then add the repository secrets `WORKER_URL`, `INGEST_TOKEN` and, optionally, `S
 | `GET /api/matches/:id` | match detail: stats, lineups, events, officials |
 | `GET /api/squad`, `/api/standings`, `/api/news` | as named |
 | `POST /api/ingest` | `Authorization: Bearer <INGEST_TOKEN>`, body `{"items": {"key": value}}` |
+| `POST /api/sync` | same auth; runs every sync step now |
 | `POST /api/live/refresh` | same auth; refreshes live fixtures now, or one Barcelona fixture `?event=` |
 
 ## Design

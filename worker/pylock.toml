@@ -1,0 +1,43 @@
+lock-version = "1.0"
+created-by = "uv"
+requires-python = ">=3.14.2"
+
+[[packages]]
+name = "cssselect"
+version = "1.5.0"
+wheels = [{ url = "https://files.pythonhosted.org/packages/60/e9/6734502f67533a752ea8b1c8f7f227c94eecf300252ba8bf23e3e59d8a36/cssselect-1.5.0-py3-none-any.whl", upload-time = 2026-07-27T09:17:33Z, size = 20797, hashes = { sha256 = "1d1aded98e82bdde447ded990a191fd6916177c4f0c914fb62eccd58e2ffcdcc" } }]
+
+[[packages]]
+name = "lxml"
+version = "6.1.3"
+wheels = [{ url = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/lxml-6.1.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl", hashes = { sha256 = "6a0b98f57a538cb6af4868c3499efec2bb52f7ed59fed94b7fbf195d6e40281f" } }]
+
+[[packages]]
+name = "orjson"
+version = "3.11.8"
+wheels = [{ url = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/orjson-3.11.8-cp314-cp314-pyemscripten_2026_0_wasm32.whl", hashes = { sha256 = "1dfad46c65f40626eee81b31e1808fa5c48bed1a604f9babe81688381b40fc43" } }]
+
+[[packages]]
+name = "scrapling"
+version = "0.4.15"
+wheels = [{ url = "https://files.pythonhosted.org/packages/87/68/bdccc7c459eb90d442cbc89a028c893381cf363165c7c58f024307b8d9ed/scrapling-0.4.15-py3-none-any.whl", upload-time = 2026-08-23T19:43:47Z, size = 180463, hashes = { sha256 = "ae66bde9f63afb793ad6f93bd76b451e29f1631347465a553c4e7765c0ecc1f2" } }]
+
+[[packages]]
+name = "tld"
+version = "0.13.2"
+wheels = [{ url = "https://files.pythonhosted.org/packages/9e/90/39a85a4b63c84213e78b3c17d22e1bf45328acf8ebb33ef93be30d0a3911/tld-0.13.2-py2.py3-none-any.whl", upload-time = 2026-03-06T23:50:32Z, size = 296743, hashes = { sha256 = "9b8fdbdb880e7ba65b216a4937f2c94c49a7226723783d5838fc958ac76f4e0c" } }]
+
+[[packages]]
+name = "typing-extensions"
+version = "4.16.0"
+wheels = [{ url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl", upload-time = 2026-07-02T08:40:04Z, size = 45571, hashes = { sha256 = "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8" } }]
+
+[[packages]]
+name = "w3lib"
+version = "2.4.1"
+wheels = [{ url = "https://files.pythonhosted.org/packages/66/c3/f8b216cbd742e5b84c40f045204c764ccb7524d2aeab021054ec69446b0a/w3lib-2.4.1-py3-none-any.whl", upload-time = 2026-03-20T09:50:26Z, size = 21695, hashes = { sha256 = "40930132907e68de906a5b89331ab8c8ff4f01bd35b5539ef7896017d814138d" } }]
+
+[[packages]]
+name = "workers-runtime-sdk"
+version = "1.9.0"
+wheels = [{ url = "https://files.pythonhosted.org/packages/94/3d/053deb135d4db2ef6f6c3ccdeb86d7829de3c271f7ae02cec73da8f65891/workers_runtime_sdk-1.9.0-py3-none-any.whl", upload-time = 2026-09-18T21:08:37Z, size = 38585, hashes = { sha256 = "36209f94984686264db4e1fd410d51ac3460f2a2ab3cc29869699b975e1e1331" } }]

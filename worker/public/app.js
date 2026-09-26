@@ -155,11 +155,12 @@ function sideBlock(team, tag) {
 
 function errorState(err, retry = true) {
   if (err instanceof ApiError && err.status === 503 && err.body?.error === "no-data") {
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(() => route(), 5000);
     return html`<div class="panel state" role="status">
-      ${icon("database")}
-      <h2>No data scraped yet</h2>
-      <p>This Worker is running but its store is empty. Run the Scrapling scraper to fill it:</p>
-      <p><code>python -m fcb_scraper --push http://127.0.0.1:8787</code></p>
+      ${icon("arrows-clockwise")}
+      <h2>Fetching the latest data</h2>
+      <p>The tracker is scraping ESPN, fcbarcelona.com and Google News. This page updates on its own in a few seconds.</p>
     </div>`;
   }
   if (err instanceof ApiError && err.status === 404) {

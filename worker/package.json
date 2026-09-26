@@ -3,15 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --port 8787",
-    "deploy": "wrangler deploy",
-    "check": "tsc --noEmit",
+    "dev": "uv run pywrangler dev --port 8787",
+    "deploy": "uv run pywrangler deploy",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260925.1",
     "@playwright/test": "1.56.1",
-    "typescript": "^5.9.2",
     "wrangler": "^4.141.0"
   }
 }

@@ -1,0 +1,9 @@
+[project]
+name = "fcb-tracker"
+version = "1.0.0"
+description = "FC Barcelona tracker: a Cloudflare Python Worker that scrapes and serves Barça data with Scrapling."
+requires-python = ">=3.13"
+dependencies = ["scrapling>=0.4.15"]
+
+[dependency-groups]
+dev = ["workers-py", "workers-runtime-sdk"]

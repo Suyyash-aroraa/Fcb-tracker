@@ -1,11 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
+import { rmSync } from "node:fs";
 
-// End-to-end: `wrangler dev` serves the Worker, the "scrape" project runs the real Scrapling
-// scraper against it, then the UI suites run in desktop and mobile Chromium.
+// End-to-end: `pywrangler dev` runs the Python Worker with an empty store; the "bootstrap" project
+// checks that the Worker scrapes everything itself on first request, then the UI suites run in
+// desktop and mobile Chromium against that live-scraped data.
 const PORT = Number(process.env.E2E_PORT ?? 8788);
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 // Only ever used by this throwaway local dev server.
 process.env.E2E_INGEST_TOKEN ??= "e2e-local-ingest-token";
+const STATE_DIR = ".wrangler/e2e-state";
+if (!process.env.TEST_WORKER_INDEX) rmSync(STATE_DIR, { recursive: true, force: true });
 
 // Behind an HTTPS proxy (CI sandboxes), let Chromium reach external crests/fonts through it
 // while talking to the local Worker directly.
@@ -24,18 +28,18 @@ export default defineConfig({
   reporter: [["list"]],
   use: { baseURL: BASE_URL, trace: "retain-on-failure", launchOptions },
   webServer: {
-    // E2E_FETCH_RELAY: see scripts/dev-egress-relay.py (only for sandboxes without direct egress).
-    command: `npx wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-state --var INGEST_TOKEN:${process.env.E2E_INGEST_TOKEN}` +
+    // The Python Worker, started with an empty store: the first request must fill it (bootstrap).
+    command: `uv run pywrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to ${STATE_DIR} --var INGEST_TOKEN:${process.env.E2E_INGEST_TOKEN}` +
       (process.env.E2E_FETCH_RELAY ? ` --var DEV_FETCH_RELAY:${process.env.E2E_FETCH_RELAY}` : ""),
-    url: `${BASE_URL}/api/health`,
+    url: `${BASE_URL}/`,
     reuseExistingServer: false,
-    timeout: 90_000,
+    timeout: 300_000,
     stdout: "ignore",
     stderr: "pipe",
   },
   projects: [
-    { name: "scrape", testMatch: /scrape\.setup\.ts/, timeout: 600_000 },
-    { name: "desktop", testMatch: /\.spec\.ts/, dependencies: ["scrape"], use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
-    { name: "mobile", testMatch: /\.spec\.ts/, dependencies: ["scrape"], use: { ...devices["Pixel 7"] } },
+    { name: "bootstrap", testMatch: /bootstrap\.setup\.ts/, timeout: 300_000 },
+    { name: "desktop", testMatch: /\.spec\.ts/, dependencies: ["bootstrap"], use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
+    { name: "mobile", testMatch: /\.spec\.ts/, dependencies: ["bootstrap"], use: { ...devices["Pixel 7"] } },
   ],
 });

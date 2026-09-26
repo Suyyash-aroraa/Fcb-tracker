@@ -1,7 +1,7 @@
 """fcbarcelona.com adapter: official player photos and profile links, and first-team news.
 
-The official site serves plain HTML to Scrapling's impersonating Fetcher; everything is read
-with CSS selectors from the server-rendered markup.
+The official site serves plain server-rendered HTML; everything is read with Scrapling's
+Selector and CSS selectors. Pure parsing: callers download PLAYERS and NEWS themselves.
 """
 
 from __future__ import annotations
@@ -11,8 +11,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 
 from scrapling.parser import Selector
-
-from .fetch import get
 
 BASE = "https://www.fcbarcelona.com"
 PLAYERS = f"{BASE}/en/football/first-team/players"
@@ -37,8 +35,8 @@ def _photo(node, size: int) -> str | None:
     return f"{src}?width={size}&height={size}" if src else None
 
 
-def fetch_players() -> list[dict]:
-    page = Selector(get(PLAYERS))
+def parse_players(html: str) -> list[dict]:
+    page = Selector(html)
     players = []
     for card in page.css("a.team-person"):
         first = _text(card, ".team-person__first-name")
@@ -90,8 +88,8 @@ def _published(label: str, now: datetime) -> str | None:
     return None
 
 
-def fetch_news(limit: int = 20) -> list[dict]:
-    page = Selector(get(NEWS))
+def parse_news(html: str, limit: int = 20) -> list[dict]:
+    page = Selector(html)
     now = datetime.now(timezone.utc)
     out, seen = [], {}
     for card in page.css("a.news-hero, a.thumbnail--news"):

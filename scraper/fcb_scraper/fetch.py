@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Callable
+from typing import Any
 
 from scrapling.fetchers import Fetcher, StealthyFetcher
 
@@ -83,13 +83,3 @@ def browser_session_json(start_url: str, api_paths: dict[str, str], *, timeout_m
     if page.status != 200 and not results:
         raise SourceError(f"HTTP {page.status} from {start_url}")
     return results
-
-
-def run_safely(label: str, fn: Callable[[], Any], log: Callable[[str], None]) -> tuple[Any, dict]:
-    """Run a source step and return (value, status) without letting one source kill the run."""
-    try:
-        value = fn()
-        return value, {"ok": True}
-    except Exception as exc:  # noqa: BLE001 - every failure is reported in meta
-        log(f"[{label}] failed: {exc}")
-        return None, {"ok": False, "detail": str(exc)[:300]}
