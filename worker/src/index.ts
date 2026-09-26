@@ -199,13 +199,12 @@ async function ingest(request: Request, env: Env): Promise<Response> {
 
 async function manualRefresh(request: Request, env: Env): Promise<Response> {
   if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
-  const url = new URL(request.url);
-  const event = url.searchParams.get("event");
+  const event = new URL(request.url).searchParams.get("event");
   if (!event) return json({ refreshed: await refreshLive(env, true) }, 200, 0);
-  if (!/^\d{1,12}$/.test(event)) return json({ error: "bad-request", message: "event must be numeric" }, 400);
+  // Only Barcelona's own fixtures can be stored; anything else would leak into the match pages.
   const known = (await read<Json[]>(env, "matches"))?.find((m) => m.id === event);
-  const base = known ?? { id: event, competition: { slug: url.searchParams.get("league") ?? "all" }, date: new Date().toISOString(), home: {}, away: {} };
-  const detail = await refreshMatch(env, base, url.searchParams.get("team") ?? FCB_ID);
+  if (!known) return json({ error: "not-found", message: `Event ${event} is not a Barcelona fixture` }, 404);
+  const detail = await refreshMatch(env, known);
   return json({ ok: true, match: detail.match, events: detail.events.length, stats: detail.stats.length, source: detail.liveSource }, 200, 0);
 }
 

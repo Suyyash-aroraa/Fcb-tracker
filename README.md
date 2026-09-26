@@ -28,7 +28,7 @@ Scrapling can't run inside a Worker, so during a match the Worker fetches live d
 - A **cron trigger runs every minute**. It does nothing unless a fixture is in its live window (75 minutes before kick-off, so lineups appear, until the match ends). Inside the window it pulls ESPN's live summary (clock, score, goals, cards, subs, team stats, lineups) and writes it to KV only when something changed.
 - **Viewers pull updates in.** Requests for the overview or a match trigger a background refresh at most every 20 seconds, so an open match page (which polls every 15 seconds while live) stays within seconds of ESPN.
 - **LiveScore is the fallback.** If ESPN fails, LiveScore's public feed supplies the score and clock.
-- `POST /api/live/refresh?event=<id>&league=<slug>&team=<id>` (with the ingest token) refreshes any ESPN event on demand. The e2e suite uses it on whatever match is in progress at test time.
+- `POST /api/live/refresh[?event=<id>]` (with the ingest token) refreshes live fixtures now, or one Barcelona fixture. Other teams' matches are refused.
 
 ## Run locally
 
@@ -81,7 +81,7 @@ Then add the repository secrets `WORKER_URL`, `INGEST_TOKEN` and, optionally, `S
 | `GET /api/matches/:id` | match detail: stats, lineups, events, officials |
 | `GET /api/squad`, `/api/standings`, `/api/news` | as named |
 | `POST /api/ingest` | `Authorization: Bearer <INGEST_TOKEN>`, body `{"items": {"key": value}}` |
-| `POST /api/live/refresh` | same auth; refreshes live matches now, or one `?event=` |
+| `POST /api/live/refresh` | same auth; refreshes live fixtures now, or one Barcelona fixture `?event=` |
 
 ## Design
 
