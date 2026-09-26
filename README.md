@@ -3,7 +3,7 @@
 FC Barcelona fixtures, results, lineups, match stats, squad, league table and news. A Cloudflare Worker serves the app, and the data is scraped with [Scrapling](https://github.com/D4Vinci/Scrapling).
 
 ```
-scraper/   Python + Scrapling: ESPN, Google News, SofaScore  ->  POST /api/ingest
+scraper/   Python + Scrapling: ESPN, fcbarcelona.com, Google News, SofaScore  ->  POST /api/ingest
 worker/    Cloudflare Worker: KV-backed JSON API + static frontend (no build step)
 .claude/skills/UIUXmasterclass-skill/   design skill the frontend was built with
 ```
@@ -15,6 +15,7 @@ Scrapling is a Python library (curl_cffi impersonation plus a patched Chromium),
 | Source | How it's scraped | What it provides |
 |---|---|---|
 | ESPN site API | Scrapling `Fetcher` with Chrome impersonation (plain clients get an Akamai 403) | Fixtures and results across all competitions, match summaries (team stats, lineups + formations, key events, officials, attendance), squad season stats, LALIGA table, ESPN news |
+| fcbarcelona.com (official site) | Scrapling `Fetcher` + CSS selectors on the server-rendered pages | Official player photos and profile links (merged into the squad), first-team news |
 | Google News | Scrapling `Fetcher` on the Google News RSS feed. Google Search itself returns a JS redirect or `/sorry` CAPTCHA to datacenter traffic | Last 7 days of FC Barcelona headlines from many publishers |
 | SofaScore | Scrapling `StealthyFetcher` opens the team page and calls SofaScore's own API from inside it | Player ratings and xG, merged into ESPN match details |
 
@@ -48,7 +49,7 @@ cd scraper
 INGEST_TOKEN=<same token> ../.venv/bin/python -m fcb_scraper --push http://127.0.0.1:8787
 ```
 
-Scraper flags: `--out DIR` writes the JSON files instead of (or as well as) pushing, `--skip espn|google|sofascore` skips a source, and `--recent N` sets how many completed matches get full detail (default 12).
+Scraper flags: `--out DIR` writes the JSON files instead of (or as well as) pushing, `--skip espn|official|google|sofascore` skips a source, and `--recent N` sets how many completed matches get full detail (default 12).
 
 ## End-to-end tests
 

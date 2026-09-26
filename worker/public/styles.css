@@ -502,6 +502,7 @@ th button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; 
 .player .avatar { width: 56px; height: 56px; }
 .player .shirt { position: absolute; right: var(--s4); top: var(--s3); font: 900 34px/1 var(--font-display); color: var(--surface-3); }
 .player-name { font-weight: 700; padding-right: 40px; line-height: 1.25; }
+.player-name a:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
 .player-meta { font-size: 13px; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
 .player-meta img { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; }
 .pstats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line); }

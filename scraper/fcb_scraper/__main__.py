@@ -17,10 +17,10 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import espn, google_news, sofascore
+from . import espn, google_news, official, sofascore
 from .fetch import run_safely
 
-SOURCES = ("espn", "google", "sofascore")
+SOURCES = ("espn", "official", "google", "sofascore")
 
 
 def log(msg: str) -> None:
@@ -78,13 +78,28 @@ def scrape(skip: set[str], recent: int) -> dict[str, object]:
         if season:
             items["season"] = season
 
+    if "official" not in skip:
+        players, s_players = run_safely("official:players", official.fetch_players, log)
+        o_news, s_news = run_safely("official:news", official.fetch_news, log)
+        matched = official.merge_into_squad(items["squad"], players) if players and items.get("squad") else 0
+        failures = [x for x in (s_players, s_news) if not x["ok"]]
+        sources["official"] = {"ok": not failures, "detail": "; ".join(f["detail"] for f in failures) or None,
+                               "photos": matched, "news": len(o_news or [])}
+        if o_news:
+            items["news:official"] = o_news
+
     if "google" not in skip:
         g_news, s_google = run_safely("google:news", google_news.fetch_news, log)
         sources["google"] = s_google
         if g_news:
             items["news:google"] = g_news
 
-    news = list(items.pop("news:google", [])) + list(items.pop("news:espn", []))
+    official_news = list(items.pop("news:official", []))
+    google = list(items.pop("news:google", []))
+    if official_news:
+        # The club's own stories come straight from fcbarcelona.com; drop Google's copies of them.
+        google = [a for a in google if not (a.get("source") or "").lower().startswith("fc barcelona")]
+    news = official_news + google + list(items.pop("news:espn", []))
     if news:
         news.sort(key=lambda a: a.get("published") or "", reverse=True)
         items["news"] = news

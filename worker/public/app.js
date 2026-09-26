@@ -175,7 +175,7 @@ function errorState(err, retry = true) {
 
 function renderFooter(meta) {
   if (!meta) { footer.innerHTML = ""; return; }
-  const names = { espn: "ESPN", google: "Google News", sofascore: "SofaScore" };
+  const names = { espn: "ESPN", official: "fcbarcelona.com", google: "Google News", sofascore: "SofaScore" };
   const src = Object.entries(meta.sources || {}).map(([k, v]) => html`<span class="${v.ok ? "ok" : "bad"}" title="${v.ok ? "Scraped OK" : v.detail || "Failed"}">
       ${icon(v.ok ? "check-circle" : "x-circle")}${names[k] || k}${v.ok ? "" : html`<span class="sr-only"> failed: ${v.detail || ""}</span>`}</span>`);
   footer.innerHTML = html`<span>Updated ${ago(meta.updatedAt)} with Scrapling${meta.season ? html`. ${meta.season}` : ""}</span><span class="sources" aria-label="Data sources">${src}</span>`;
@@ -666,7 +666,7 @@ async function viewSquad() {
     return html`<article class="panel player" aria-label="${p.name}">
       ${avatar(p, 56)}
       <div style="min-width:0">
-        <div class="player-name">${p.name}</div>
+        <div class="player-name">${safeUrl(p.profile) ? html`<a href="${p.profile}" target="_blank" rel="noopener noreferrer">${p.name}</a>` : p.name}</div>
         <div class="player-meta">${safeUrl(p.flag) ? html`<img src="${p.flag}" alt="" width="16" height="11" loading="lazy">` : ""}${p.nationality || ""}${p.age ? `, ${p.age}` : ""}</div>
         ${p.injured ? html`<div class="player-meta injury">${icon("first-aid")}Injured</div>` : ""}
       </div>
@@ -683,7 +683,7 @@ async function viewSquad() {
   };
   main.innerHTML = html`<div class="view">
     <div class="page-head">
-      <div><h1 class="page-title">Squad</h1><p class="page-sub">${squad.length} players. League stats this season from ESPN.</p></div>
+      <div><h1 class="page-title">Squad</h1><p class="page-sub">${squad.length} players. League stats from ESPN, photos from fcbarcelona.com.</p></div>
       <div class="toolbar"><label class="inline" for="sort">Sort by</label>
         <span class="select"><select id="sort">
           <option value="number">Shirt number</option><option value="goals">Goals</option><option value="assists">Assists</option><option value="apps">Appearances</option><option value="age">Age</option>
@@ -731,9 +731,10 @@ async function viewNews() {
     main.querySelectorAll("[data-origin]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.origin === origin)));
   };
   main.innerHTML = html`<div class="view">
-    <div class="page-head"><div><h1 class="page-title">News</h1><p class="page-sub">The last seven days from Google News and ESPN.</p></div>
+    <div class="page-head"><div><h1 class="page-title">News</h1><p class="page-sub">From fcbarcelona.com, Google News and ESPN.</p></div>
       <div class="chips" role="group" aria-label="Filter by source">
         <button class="chip" type="button" data-origin="all" aria-pressed="true">All</button>
+        <button class="chip" type="button" data-origin="official" aria-pressed="false">FC Barcelona</button>
         <button class="chip" type="button" data-origin="google" aria-pressed="false">Google News</button>
         <button class="chip" type="button" data-origin="espn" aria-pressed="false">ESPN</button>
       </div></div>
