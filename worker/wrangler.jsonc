@@ -10,9 +10,8 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  // Omitting "id" lets `wrangler deploy` provision the namespace automatically.
-  // Local `wrangler dev` stores KV under .wrangler/state.
-  "kv_namespaces": [{ "binding": "FCB_DATA" }],
+  // The existing "fcb-tracker-fcb-data" namespace. Local `pywrangler dev` stores KV under .wrangler/state.
+  "kv_namespaces": [{ "binding": "FCB_DATA", "id": "2e67e3f3dfef4430bc6f779ab8f1413d" }],
   // Every minute: follow live matches, and run whichever sync steps are due (see src/fcb/pipeline.py).
   "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
