@@ -228,6 +228,9 @@ main { max-width: 1240px; margin: 0 auto; padding: var(--s5) var(--s5) var(--s7)
 .hero-meta { display: flex; gap: var(--s2) var(--s5); flex-wrap: wrap; color: var(--text-2); font-size: 14px; }
 .hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
 .hero-meta i { font-size: 16px; color: var(--text-3); }
+.watch { display: inline-flex; align-items: center; gap: 6px; }
+.watch a { color: var(--accent-text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.mr-tv { color: var(--text-2); }
 
 .last-label { font: 700 16px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
 .last-score { display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s3); }

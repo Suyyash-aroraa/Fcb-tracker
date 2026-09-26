@@ -12,7 +12,7 @@ setup("the Worker fills an empty store by scraping every source itself", async (
   const o = await res.json();
   expect(o.team.name).toBe("Barcelona");
   expect(o.meta.scraper).toMatch(/Scrapling/);
-  for (const source of ["espn", "official", "google"]) {
+  for (const source of ["espn", "official", "google", "livesoccertv"]) {
     expect(o.meta.sources[source]?.ok, `${source}: ${o.meta.sources[source]?.detail}`).toBe(true);
   }
   for (const key of ["squad", "standings", "news"]) expect((await request.get(`/api/${key}`)).status()).toBe(200);
@@ -22,6 +22,9 @@ setup("the Worker fills an empty store by scraping every source itself", async (
     expect(d.stats.length + d.events.length, `detail for ${m.id}`).toBeGreaterThan(0);
   }
   console.log("sources:", JSON.stringify(o.meta.sources));
+  const withTv = matches.filter((m: any) => m.status.state === "pre" && m.tv?.channels?.length);
+  expect(withTv.length, "India TV listings for upcoming fixtures").toBeGreaterThan(0);
+  console.log("India TV:", withTv.map((m: any) => `${m.home.short} v ${m.away.short}: ${m.tv.channels.join(", ")}`).join(" | "));
 
   // Fresh data: a second request must not start another background refresh.
   expect((await (await request.get("/api/overview")).json()).refreshing).toBe(false);

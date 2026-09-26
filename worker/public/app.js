@@ -185,7 +185,7 @@ function errorState(err, retry = true) {
 
 function renderFooter(meta) {
   if (!meta) { footer.innerHTML = ""; return; }
-  const names = { espn: "ESPN", official: "fcbarcelona.com", google: "Google News", sofascore: "SofaScore" };
+  const names = { espn: "ESPN", official: "fcbarcelona.com", google: "Google News", livesoccertv: "LiveSoccerTV", sofascore: "SofaScore" };
   const src = Object.entries(meta.sources || {}).map(([k, v]) => html`<span class="${v.ok ? "ok" : "bad"}" title="${v.ok ? "Scraped OK" : v.detail || "Failed"}">
       ${icon(v.ok ? "check-circle" : "x-circle")}${names[k] || k}${v.ok ? "" : html`<span class="sr-only"> failed: ${v.detail || ""}</span>`}</span>`);
   footer.innerHTML = html`<span>Updated ${ago(meta.updatedAt)} with Scrapling${meta.season ? html`. ${meta.season}` : ""}</span><span class="sources" aria-label="Data sources">${src}</span>`;
@@ -202,12 +202,21 @@ function countdownCells(iso) {
   </div>`;
 }
 
+/* Where to watch in India (LiveSoccerTV listings, see worker/src/fcb/tv.py). */
+function watchIndia(m, long = true) {
+  const t = m.tv;
+  if (!t || !t.channels?.length) return "";
+  const names = t.channels.join(", ");
+  const link = safeUrl(t.url);
+  return html`<span class="watch">${icon("television-simple")}${long ? "Watch in India: " : ""}${link ? html`<a href="${link}" target="_blank" rel="noopener noreferrer">${names}</a>` : names}</span>`;
+}
+
 function matchMeta(m) {
   const w = whenLabel(m.date);
   return html`<div class="hero-meta">
     <span>${icon("calendar-blank")}${w.day}, ${w.time} <span class="sr-only">${zoneName(new Date(m.date))}</span></span>
     ${m.venue?.name ? html`<span>${icon("map-pin")}${m.venue.name}${m.venue.city ? `, ${m.venue.city}` : ""}</span>` : ""}
-    ${m.broadcasts?.length ? html`<span>${icon("television-simple")}${m.broadcasts.join(", ")}</span>` : ""}
+    ${watchIndia(m)}
   </div>`;
 }
 
@@ -345,6 +354,7 @@ function matchRow(m) {
     <div class="mr-team ${m.away.id === FCB ? "fcb" : ""}">${crest(m.away, 26)}${name(m.away)}</div>
     <div class="mr-res">${live ? html`<span class="live-flag">Live</span>` : wdl(m.result)}</div>
     ${m.note ? html`<div class="mr-comp">${m.note}</div>` : ""}
+    ${!done && !live && m.tv?.channels?.length ? html`<div class="mr-comp mr-tv">India: ${m.tv.channels.join(", ")}</div>` : ""}
   </a>`;
 }
 
@@ -640,7 +650,7 @@ async function viewMatch(id, tab) {
         ${state !== "pre" ? html`<span>${icon("calendar-blank")}${fmt.dayLong.format(w)}</span>` : ""}
         ${d.venue || m.venue?.name ? html`<span>${icon("map-pin")}${d.venue || m.venue.name}</span>` : ""}
         ${d.attendance ? html`<span>${icon("users")}${Number(d.attendance).toLocaleString()} fans</span>` : ""}
-        ${m.broadcasts?.length ? html`<span>${icon("television-simple")}${m.broadcasts.join(", ")}</span>` : ""}
+        ${watchIndia(m)}
       </div>
     </section>
     <div class="tabs-row">${tabs("match-tabs", [["summary", state === "pre" ? "Preview" : "Summary"], ["stats", "Stats"], ["lineups", "Lineups"]], tab, (t) => `#/match/${m.id}/${t}`)}</div>

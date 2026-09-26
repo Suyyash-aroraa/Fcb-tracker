@@ -25,7 +25,7 @@ from workers import Response, WorkerEntrypoint, fetch
 
 from fcb import FCB_ESPN_ID, espn, pipeline
 
-KEY_PATTERN = re.compile(r"^(meta|team|matches|squad|standings|news|match:\d{1,12})$")
+KEY_PATTERN = re.compile(r"^(meta|team|matches|squad|standings|news|tv|match:\d{1,12})$")
 LIVE_MIN_INTERVAL = 20  # seconds between viewer-triggered live refreshes, per isolate
 SYNC_RETRY_AFTER = 30  # seconds before retrying a background sync that failed
 USER_AGENT = "fcb-tracker/1.0 (+Cloudflare Worker)"
@@ -33,6 +33,13 @@ USER_AGENT = "fcb-tracker/1.0 (+Cloudflare Worker)"
 _last_live_refresh = 0.0
 _sync_running = False
 _sync_failed_at = 0.0
+
+
+def with_tv(match: dict | None, guide: dict | None) -> dict | None:
+    """Attach where-to-watch-in-India listings (fcb/tv.py) to a match, when known."""
+    if match and guide and match.get("id") in guide:
+        return {**match, "tv": guide[match["id"]]}
+    return match
 
 
 def respond(body, status: int = 200, max_age: int = 60) -> Response:
@@ -68,7 +75,7 @@ class HttpIO:
 # Keep parsed values in the isolate for a few seconds, and let slow-changing keys sit in KV's edge
 # cache for longer. Matches and match details keep KV's default so live scores stay fresh.
 MEMORY_TTL = 15
-SLOW_KEYS = {"team": 300, "squad": 300, "standings": 300, "news": 300}
+SLOW_KEYS = {"team": 300, "squad": 300, "standings": 300, "news": 300, "tv": 300}
 _memory: dict[str, tuple[float, object]] = {}
 
 
@@ -160,6 +167,8 @@ class Default(WorkerEntrypoint):
             await self._fill()
             values = await s.many(*keys)
         meta, team, matches, squad, standings, news = values
+        guide = await s.get("tv")
+        matches = [with_tv(m, guide) for m in matches] if matches else matches
         refreshing = self._refresh_stale_in_background(meta)
         if not matches:
             return respond({"error": "no-data", "message": "No data yet. The Worker is fetching it; try again in a moment."}, 503)
@@ -195,6 +204,9 @@ class Default(WorkerEntrypoint):
             meta, data = await self.store.many("meta", key)
         if data is None:
             return respond({"error": "no-data", "message": "No data yet. The Worker is fetching it; try again in a moment."}, 503)
+        if key == "matches":
+            guide = await self.store.get("tv")
+            data = [with_tv(m, guide) for m in data]
         return respond({"meta": meta, "refreshing": self._refresh_stale_in_background(meta), key: data})
 
     async def _current(self, detail: dict | None) -> dict | None:
@@ -208,14 +220,16 @@ class Default(WorkerEntrypoint):
         return detail
 
     async def match_detail(self, match_id: str) -> Response:
-        detail = await self._current(await self.store.get(f"match:{match_id}"))
+        detail, guide = await self.store.many(f"match:{match_id}", "tv")
+        detail = await self._current(detail)
         if detail:
+            detail = {**detail, "match": with_tv(detail["match"], guide)}
             live = detail.get("match", {}).get("status", {}).get("state") == "in"
             return respond(detail, max_age=5 if live else 120)
         match = next((m for m in (await self.store.get("matches") or []) if m["id"] == match_id), None)
         if not match:
             return respond({"error": "not-found", "message": f"No match with id {match_id}"}, 404)
-        return respond({"match": match, "stats": [], "lineups": {}, "events": [], "officials": []})
+        return respond({"match": with_tv(match, guide), "stats": [], "lineups": {}, "events": [], "officials": []})
 
     # ---------------------------------------------------------------- writes
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Protocol
 
-from . import espn, google_news, livescore, official
+from . import espn, google_news, livescore, official, tv
 
 MINUTE = 60
 
@@ -32,9 +32,11 @@ STEPS: dict[str, int] = {
     "table": 30 * MINUTE,
     "squad": 6 * 60 * MINUTE,
     "news": 30 * MINUTE,
+    "tv": 6 * 60 * MINUTE,
 }
 # Which data sources each step uses, for the per-source status shown in the footer.
-STEP_SOURCES = {"fixtures": ["espn"], "details": ["espn"], "table": ["espn"], "squad": ["espn", "official"], "news": ["official", "google", "espn"]}
+STEP_SOURCES = {"fixtures": ["espn"], "details": ["espn"], "table": ["espn"], "squad": ["espn", "official"], "news": ["official", "google", "espn"], "tv": ["livesoccertv"]}
+TV_UPCOMING = 6  # India TV listings are fetched for this many upcoming fixtures
 
 # Live window: lineups appear about an hour before kick-off; extra time and penalties run long.
 LIVE_BEFORE = timedelta(minutes=75)
@@ -117,6 +119,25 @@ async def _squad(io: IO, store: Store, status: dict) -> dict:
     return {"players": len(squad), "photos": photos}
 
 
+async def _tv(io: IO, store: Store, status: dict) -> dict:
+    """Where to watch in India for the next fixtures (and any live one), keyed by match id."""
+    matches = await store.get("matches") or []
+    wanted = [m for m in matches if m["status"].get("state") == "in"]
+    wanted += [m for m in matches if m["status"].get("state") == "pre"][:TV_UPCOMING]
+    listings = tv.parse_team(await io.get_text(tv.TEAM_URL))
+    guide = {k: v for k, v in (await store.get("tv") or {}).items() if k in {m["id"] for m in matches}}
+    found = 0
+    for m in wanted:
+        item = tv.match_listing(m, listings)
+        if not item:
+            continue
+        channels = tv.parse_country(await io.get_text(item["url"]))
+        guide[m["id"]] = {"country": tv.COUNTRY, "channels": channels, "url": item["url"], "checked": _iso(_now())}
+        found += bool(channels)
+    await store.put("tv", guide)
+    return {"matches": len(wanted), "with_channels": found}
+
+
 async def _news(io: IO, store: Store, status: dict) -> dict:
     lists: dict[str, list] = {}
     for name, get in (
@@ -180,6 +201,7 @@ async def sync(io: IO, store: Store, *, force: bool = False, bootstrap: bool = F
         "table": lambda: _table(io, store, status),
         "squad": lambda: _squad(io, store, status),
         "news": lambda: _news(io, store, status),
+        "tv": lambda: _tv(io, store, status),
     }
     for step in due:
         try:

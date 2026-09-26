@@ -107,6 +107,9 @@ test.describe("UI", () => {
     }
     await expect(page.locator(".area-news .news-item")).toHaveCount(Math.min(o.news.length, 5));
     await expect(page.locator("footer")).toContainText("Scrapling");
+    if (o.next?.tv?.channels?.length && !o.live) {
+      await expect(page.locator("section.hero .watch")).toContainText(`Watch in India: ${o.next.tv.channels.join(", ")}`);
+    }
     await noHorizontalScroll(page);
     await noDashes(page);
     expect(errors).toEqual([]);

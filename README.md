@@ -22,6 +22,7 @@ Everything runs in one **Cloudflare Python Worker** (`worker/`). There is no sep
 | ESPN public JSON | Fixtures and results in every competition, match summaries (team stats, lineups and formations, key events, officials, attendance), squad season stats, LALIGA table, ESPN news |
 | fcbarcelona.com (official site) | Official player photos and profile links (merged into the squad), first-team news |
 | Google News RSS | The last week of headlines from many publishers. Google Search itself returns a CAPTCHA to datacenter traffic |
+| LiveSoccerTV | Where to watch in India for upcoming fixtures (per-country TV listings) |
 | LiveScore public feed | Live score and clock if ESPN fails during a match |
 | SofaScore (optional) | Player ratings and xG. Needs Scrapling's stealth browser and a residential connection, so only the optional command-line scraper can add it |
 
