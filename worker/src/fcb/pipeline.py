@@ -33,15 +33,20 @@ STEPS: dict[str, int] = {
     "squad": 6 * 60 * MINUTE,
     "news": 30 * MINUTE,
     "tv": 6 * 60 * MINUTE,
+    "history": 24 * 60 * MINUTE,
 }
 # Which data sources each step uses, for the per-source status shown in the footer.
-STEP_SOURCES = {"fixtures": ["espn"], "details": ["espn"], "table": ["espn"], "squad": ["espn", "official"], "news": ["official", "google", "espn"], "tv": ["livesoccertv"]}
+STEP_SOURCES = {"fixtures": ["espn"], "details": ["espn"], "table": ["espn"], "squad": ["espn", "official"], "news": ["official", "google", "espn"], "tv": ["livesoccertv"], "history": ["espn"]}
 TV_UPCOMING = 6  # India TV listings are fetched for this many upcoming fixtures
 
 # Live window: lineups appear about an hour before kick-off; extra time and penalties run long.
 LIVE_BEFORE = timedelta(minutes=75)
 LIVE_AFTER = timedelta(hours=3, minutes=30)
 RECENT_DETAILS = None  # every completed match this season
+# Past results kept for head-to-head records: everything played since this date. The 2019-20
+# season ran into August 2020, so it is the first season fetched.
+HISTORY_FROM = "2020-01-01"
+HISTORY_FIRST_SEASON = 2019
 
 
 def _now() -> datetime:
@@ -178,6 +183,45 @@ async def _tv(io: IO, store: Store, status: dict) -> dict:
     return {"matches": len(wanted), "listed": found}
 
 
+def _season_year(now: datetime) -> int:
+    """ESPN names a season by the year it starts; a new one starts in July."""
+    return now.year if now.month >= 7 else now.year - 1
+
+
+async def _history(io: IO, store: Store, status: dict) -> dict:
+    """Completed matches of past seasons since HISTORY_FROM, for head-to-head records.
+
+    Finished seasons never change, so each is fetched once; a daily run only picks up a season
+    that has just finished."""
+    history = await store.get("history") or {}
+    seasons = dict(history.get("seasons") or {})
+    wanted = [str(y) for y in range(HISTORY_FIRST_SEASON, _season_year(_now()))]
+    errors = []
+    for year in wanted:
+        if year in seasons:
+            continue
+        try:
+            matches, _ = espn.parse_matches(await io.get_json(espn.season_url(int(year))), {})
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{year}: {exc}")
+            continue
+        seasons[year] = [espn.compact(m) for m in matches
+                         if m["status"].get("completed") and (m["date"] or "") >= HISTORY_FROM]
+    if errors and not seasons:
+        raise RuntimeError("; ".join(errors))
+    await store.put("history", {"from": HISTORY_FROM, "seasons": {y: seasons[y] for y in wanted if y in seasons}})
+    return {"seasons": len(seasons), "matches": sum(len(v) for v in seasons.values()), "remaining": len(errors)}
+
+
+def meetings(opponent_id: str, history: dict | None, matches: list[dict] | None, exclude: str | None = None) -> list[dict]:
+    """Every completed match against one opponent since HISTORY_FROM, newest first."""
+    past = [m for season in ((history or {}).get("seasons") or {}).values() for m in season]
+    current = [m for m in matches or [] if m["status"].get("state") == "post"]
+    by_id = {m["id"]: m for m in past + current
+             if m["id"] != exclude and opponent_id in (m["home"]["id"], m["away"]["id"])}
+    return sorted(by_id.values(), key=lambda m: m.get("date") or "", reverse=True)
+
+
 async def _news(io: IO, store: Store, status: dict) -> dict:
     lists: dict[str, list] = {}
     for name, get in (
@@ -242,6 +286,7 @@ async def sync(io: IO, store: Store, *, force: bool = False, bootstrap: bool = F
         "squad": lambda: _squad(io, store, status),
         "news": lambda: _news(io, store, status),
         "tv": lambda: _tv(io, store, status),
+        "history": lambda: _history(io, store, status),
     }
     for step in due:
         try:

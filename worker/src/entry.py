@@ -25,7 +25,7 @@ from workers import Response, WorkerEntrypoint, fetch
 
 from fcb import FCB_ESPN_ID, espn, pipeline
 
-KEY_PATTERN = re.compile(r"^(meta|team|matches|squad|standings|news|tv|match:\d{1,12})$")
+KEY_PATTERN = re.compile(r"^(meta|team|matches|squad|standings|news|tv|history|match:\d{1,12})$")
 LIVE_MIN_INTERVAL = 20  # seconds between viewer-triggered live refreshes, per isolate
 SYNC_RETRY_AFTER = 30  # seconds before retrying a background sync that failed
 USER_AGENT = "fcb-tracker/1.0 (+Cloudflare Worker)"
@@ -75,7 +75,7 @@ class HttpIO:
 # Keep parsed values in the isolate for a few seconds, and let slow-changing keys sit in KV's edge
 # cache for longer. Matches and match details keep KV's default so live scores stay fresh.
 MEMORY_TTL = 15
-SLOW_KEYS = {"team": 300, "squad": 300, "standings": 300, "news": 300, "tv": 300}
+SLOW_KEYS = {"team": 300, "squad": 300, "standings": 300, "news": 300, "tv": 300, "history": 300}
 _memory: dict[str, tuple[float, object]] = {}
 
 
@@ -220,16 +220,30 @@ class Default(WorkerEntrypoint):
         return detail
 
     async def match_detail(self, match_id: str) -> Response:
-        detail, guide = await self.store.many(f"match:{match_id}", "tv")
+        detail, guide, matches, history = await self.store.many(f"match:{match_id}", "tv", "matches", "history")
         detail = await self._current(detail)
-        if detail:
-            detail = {**detail, "match": with_tv(detail["match"], guide)}
-            live = detail.get("match", {}).get("status", {}).get("state") == "in"
-            return respond(detail, max_age=5 if live else 120)
-        match = next((m for m in (await self.store.get("matches") or []) if m["id"] == match_id), None)
-        if not match:
-            return respond({"error": "not-found", "message": f"No match with id {match_id}"}, 404)
-        return respond({"match": with_tv(match, guide), "stats": [], "lineups": {}, "events": [], "officials": []})
+        if not detail:
+            match = next((m for m in matches or [] if m["id"] == match_id), None)
+            if match:
+                detail = {"match": match, "stats": [], "lineups": {}, "events": [], "officials": []}
+            else:
+                # An older result (head-to-head list): fetch its summary from ESPN on first view.
+                past = next((m for season in ((history or {}).get("seasons") or {}).values() for m in season if m["id"] == match_id), None)
+                if not past:
+                    return respond({"error": "not-found", "message": f"No match with id {match_id}"}, 404)
+                try:
+                    detail = espn.parse_detail(await self.io.get_json(espn.summary_url(past)), past)
+                    await self.store.put(f"match:{match_id}", detail)
+                except Exception as exc:  # noqa: BLE001 - show the result without the details
+                    print(f"summary of past match {match_id} failed: {exc}")
+                    detail = {"match": past, "stats": [], "lineups": {}, "events": [], "officials": []}
+        m = detail["match"]
+        opp = m["away"] if m.get("fcbSide") == "home" else m["home"]
+        detail = {**detail, "match": with_tv(m, guide),
+                  "meetings": pipeline.meetings(opp["id"], history, matches, exclude=match_id),
+                  "meetingsFrom": pipeline.HISTORY_FROM}
+        live = m.get("status", {}).get("state") == "in"
+        return respond(detail, max_age=5 if live else 120)
 
     # ---------------------------------------------------------------- writes
 

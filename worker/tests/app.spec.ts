@@ -191,6 +191,39 @@ test.describe("UI", () => {
     expect(errors).toEqual([]);
   });
 
+  test("head-to-head: every meeting since 2020, and older games open in the match centre", async ({ page, request }) => {
+    const errors = pageErrors(page);
+    const { matches } = await (await request.get("/api/matches")).json();
+    const next = matches.find((m: any) => m.status.state === "pre" && m.competition.slug === "esp.1");
+    test.skip(!next, "no LALIGA fixture scheduled right now");
+    const detail = await (await request.get(`/api/matches/${next.id}`)).json();
+    const opp = next.fcbSide === "home" ? next.away : next.home;
+    const seasonStart = matches[0].date;
+    expect(detail.meetings.length).toBeGreaterThan(0);
+    expect(detail.meetings.some((m: any) => m.date < seasonStart), "earlier seasons are included").toBe(true);
+    for (const m of detail.meetings) {
+      expect([m.home.id, m.away.id]).toContain(opp.id);
+      expect(m.date >= "2020-01-01").toBe(true);
+      expect(m.status.completed).toBe(true);
+    }
+    const dates = detail.meetings.map((m: any) => m.date);
+    expect(dates).toEqual([...dates].sort().reverse());
+
+    await page.goto(`/#/match/${next.id}`);
+    await expect(page.locator(".preview")).toContainText("Meetings since 2020");
+    await expect(page.locator(".h2h div").first()).toContainText(String(detail.meetings.length));
+    await expect(page.locator(".preview .match-row")).toHaveCount(detail.meetings.length);
+    const old = detail.meetings.at(-1);
+    await page.locator(`.preview a.match-row[href="#/match/${old.id}"]`).click();
+    await expect(page.locator(".scoreboard")).toContainText(String(old.home.score));
+    const oldDetail = await (await request.get(`/api/matches/${old.id}`)).json();
+    expect(oldDetail.match.id).toBe(old.id);
+    expect(oldDetail.stats.length, "summary fetched on demand").toBeGreaterThan(0);
+    await noHorizontalScroll(page);
+    await noDashes(page);
+    expect(errors).toEqual([]);
+  });
+
   test("squad groups and sorting", async ({ page, request }) => {
     const errors = pageErrors(page);
     const { squad } = await (await request.get("/api/squad")).json();

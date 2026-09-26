@@ -23,6 +23,16 @@ URLS = {
 }
 
 
+def season_url(year: int) -> str:
+    """Every competition's results for the season starting in `year`."""
+    return f"{URLS['results']}?season={year}"
+
+
+def compact(match: dict) -> dict:
+    """A past result without the fields only upcoming fixtures need."""
+    return {k: v for k, v in match.items() if k not in ("broadcasts", "attendance")}
+
+
 def summary_url(match: dict) -> str:
     return f"{SITE}/{match['competition'].get('slug') or 'all'}/summary?event={match['id']}"
 

@@ -615,6 +615,25 @@ function lineupsView(d) {
   return html`<div class="lineups">${teamLineup(d, "home")}${teamLineup(d, "away")}</div>`;
 }
 
+// ESPN seasons start in July: a match in March 2024 belongs to 2023-24.
+function seasonOf(iso) {
+  const d = new Date(iso), y = d.getUTCMonth() >= 6 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
+  return `${y}-${String(y + 1).slice(2)}`;
+}
+function meetingsView(list) {
+  const count = (r) => list.filter((x) => x.result === r).length;
+  const goals = (side) => list.reduce((n, x) => n + (((side === "fcb") === (x.fcbSide === "home") ? x.home.score : x.away.score) ?? 0), 0);
+  const seasons = [];
+  for (const x of list) {
+    const s = seasonOf(x.date);
+    if (seasons.at(-1)?.name !== s) seasons.push({ name: s, games: [] });
+    seasons.at(-1).games.push(x);
+  }
+  const tally = [["Played", list.length], ["Won", count("W")], ["Drawn", count("D")], ["Lost", count("L")], ["Goals", `${goals("fcb")}:${goals("opp")}`]];
+  return html`<dl class="h2h" aria-label="Barcelona's record in these meetings">${tally.map(([k, v]) => html`<div><dt>${k}</dt><dd class="num">${v}</dd></div>`)}</dl>
+    ${seasons.map((s) => html`<h4 class="h2h-season">${s.name}</h4><div class="match-list">${s.games.map(matchRow)}</div>`)}`;
+}
+
 function preview(d, ctx) {
   const m = d.match, opp = opponent(m);
   const rows = ctx.standings?.rows || [];
@@ -622,14 +641,14 @@ function preview(d, ctx) {
   const table = [pos(m.home.id), pos(m.away.id)].filter(Boolean).sort((a, b) => a.rank - b.rank);
   const played = (ctx.matches || []).filter((x) => x.status.state === "post");
   const form = played.slice(-5).reverse();
-  const meetings = played.filter((x) => x.home.id === opp.id || x.away.id === opp.id).reverse();
+  const meetings = d.meetings || played.filter((x) => x.home.id === opp.id || x.away.id === opp.id).reverse();
   return html`<div class="preview">
     ${table.length === 2 ? html`<section><h3 class="sub-title">League position</h3>${standingsTable(table, false)}</section>` : ""}
     <section><h3 class="sub-title">Barcelona form</h3>
       ${form.length ? html`<div class="form-row" style="margin-top:var(--s3)">${form.map((x) => { const o = opponent(x); return html`<a class="form-item" href="#/match/${x.id}" aria-label="${x.result} ${x.fcbSide === "home" ? "vs" : "at"} ${o.name}, ${scoreText(x)}">${crest(o, 32)}<span class="form-score num">${scoreText(x)?.split(" ")[0]}</span>${wdl(x.result)}</a>`; })}</div>` : html`<p class="page-sub">No matches played yet.</p>`}
     </section>
-    <section><h3 class="sub-title">Earlier meetings this season</h3>
-      ${meetings.length ? html`<div class="match-list">${meetings.map(matchRow)}</div>` : html`<p class="page-sub" style="margin-top:var(--s2)">First meeting of the season with ${opp.name}.</p>`}
+    <section><h3 class="sub-title">Meetings since ${(d.meetingsFrom || "2020").slice(0, 4)}</h3>
+      ${meetings.length ? meetingsView(meetings) : html`<p class="page-sub" style="margin-top:var(--s2)">No meetings with ${opp.name} since ${(d.meetingsFrom || "2020").slice(0, 4)}.</p>`}
     </section>
   </div>`;
 }
