@@ -88,8 +88,9 @@ In the Cloudflare dashboard: **Workers & Pages → your Worker → Settings → 
 | Root directory | `worker` |
 | Build command | *(leave empty)* |
 | Deploy command | `npm run deploy:ci` |
+| Preview command (non-production branches) | `npm run preview:ci` |
 
-`deploy:ci` installs uv (the build image has Python and pip but not uv) and runs `pywrangler deploy`, which bundles the Python packages. Plain `npx wrangler deploy` does not. The Worker's name in the dashboard must match `name` in `wrangler.jsonc` (`fcb-tracker`). Every push to that branch then redeploys.
+Both run `scripts/ci.sh`, which installs uv (the build image has Python and pip but not uv), puts it on PATH for pywrangler, and bundles the Python packages before `wrangler deploy` / `wrangler preview`. The defaults (`npx wrangler deploy`, `npx wrangler preview`) would upload the Worker without its Python packages. The Worker's name in the dashboard must match `name` in `wrangler.jsonc` (`fcb-tracker`). Every push to that branch then redeploys.
 
 That's all: open the site and it fills itself, then the cron keeps it current. `npx wrangler secret put INGEST_TOKEN` is only needed for the token-protected endpoints (`/api/sync`, `/api/live/refresh`, `/api/ingest`).
 

@@ -7,3 +7,4 @@ test-results/
 playwright-report/
 .venv-workers/
 python_modules/
+.ci-bin/

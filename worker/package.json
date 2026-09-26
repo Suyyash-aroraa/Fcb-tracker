@@ -6,7 +6,8 @@
     "dev": "uv run pywrangler dev --port 8787",
     "deploy": "uv run pywrangler deploy",
     "test:e2e": "playwright test",
-    "deploy:ci": "python3 -m pip install --quiet 'uv>=0.12.3' && python3 -m uv run pywrangler deploy"
+    "deploy:ci": "sh scripts/ci.sh deploy",
+    "preview:ci": "sh scripts/ci.sh preview"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
