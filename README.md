@@ -20,6 +20,15 @@ Scrapling is a Python library (curl_cffi impersonation plus a patched Chromium),
 
 SofaScore blocks many datacenter IP ranges outright (its edge returns 403 to every client). From those networks, set `SCRAPER_PROXY` to a residential proxy or run the scraper from a home connection. Without it the app still works, and the footer shows SofaScore as unavailable.
 
+## Live matches
+
+Scrapling can't run inside a Worker, so during a match the Worker fetches live data itself (`worker/src/live.ts`):
+
+- A **cron trigger runs every minute**. It does nothing unless a fixture is in its live window (75 minutes before kick-off, so lineups appear, until the match ends). Inside the window it pulls ESPN's live summary (clock, score, goals, cards, subs, team stats, lineups) and writes it to KV only when something changed.
+- **Viewers pull updates in.** Requests for the overview or a match trigger a background refresh at most every 20 seconds, so an open match page (which polls every 15 seconds while live) stays within seconds of ESPN.
+- **LiveScore is the fallback.** If ESPN fails, LiveScore's public feed supplies the score and clock.
+- `POST /api/live/refresh?event=<id>&league=<slug>&team=<id>` (with the ingest token) refreshes any ESPN event on demand. The e2e suite uses it on whatever match is in progress at test time.
+
 ## Run locally
 
 ```bash
@@ -48,6 +57,8 @@ cd worker
 npm run test:e2e
 ```
 
+If your sandbox lets command-line tools out through a proxy but gives wrangler's local runtime no internet access, run `python3 worker/scripts/dev-egress-relay.py` and set `E2E_FETCH_RELAY=http://127.0.0.1:8798`.
+
 Playwright starts `wrangler dev` on port 8788, runs the real Scrapling scraper against it (no fixtures or mock data), then checks every view against the API in desktop and mobile Chromium. The checks cover the API and ingest auth, the overview, results and filters, the match centre tabs (timeline, stats, lineups, keyboard tab navigation), fixtures and the pre-match preview, squad sorting, the table, news filters, theme persistence, the not-found state, no horizontal scroll, and no em/en dashes in the copy.
 
 ## Deploy
@@ -69,6 +80,7 @@ Then add the repository secrets `WORKER_URL`, `INGEST_TOKEN` and, optionally, `S
 | `GET /api/matches/:id` | match detail: stats, lineups, events, officials |
 | `GET /api/squad`, `/api/standings`, `/api/news` | as named |
 | `POST /api/ingest` | `Authorization: Bearer <INGEST_TOKEN>`, body `{"items": {"key": value}}` |
+| `POST /api/live/refresh` | same auth; refreshes live matches now, or one `?event=` |
 
 ## Design
 

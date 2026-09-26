@@ -24,7 +24,9 @@ export default defineConfig({
   reporter: [["list"]],
   use: { baseURL: BASE_URL, trace: "retain-on-failure", launchOptions },
   webServer: {
-    command: `npx wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-state --var INGEST_TOKEN:${process.env.E2E_INGEST_TOKEN}`,
+    // E2E_FETCH_RELAY: see scripts/dev-egress-relay.py (only for sandboxes without direct egress).
+    command: `npx wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-state --var INGEST_TOKEN:${process.env.E2E_INGEST_TOKEN}` +
+      (process.env.E2E_FETCH_RELAY ? ` --var DEV_FETCH_RELAY:${process.env.E2E_FETCH_RELAY}` : ""),
     url: `${BASE_URL}/api/health`,
     reuseExistingServer: false,
     timeout: 90_000,

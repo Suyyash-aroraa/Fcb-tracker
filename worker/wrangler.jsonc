@@ -12,5 +12,7 @@
   // Omitting "id" lets `wrangler deploy` provision the namespace automatically.
   // Local `wrangler dev` stores KV under .wrangler/state.
   "kv_namespaces": [{ "binding": "FCB_DATA" }],
+  // Live refresh: runs every minute but only fetches while a fixture is in its live window.
+  "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
 }

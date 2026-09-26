@@ -386,9 +386,11 @@ async function viewOverview() {
       if (el && cells) el.outerHTML = cells;
     }, 30000);
   }
+  // Close to kick-off, keep polling so lineups and the first whistle show up on their own.
+  if (!o.live && o.next && Date.parse(o.next.date) - Date.now() < 75 * 60000) pollTimer = setTimeout(() => route(), 60000);
   if (o.live) {
     liveRegion.textContent = `Live: ${o.live.home.name} ${o.live.home.score}, ${o.live.away.name} ${o.live.away.score}`;
-    pollTimer = setTimeout(() => route(), 60000);
+    pollTimer = setTimeout(() => route(), 20000);
   }
 }
 
@@ -621,7 +623,7 @@ async function viewMatch(id, tab) {
         ${state === "pre" ? html`<div class="vs">${fmt.time.format(w)}</div>` : bigScore(m)}
         ${sideBlock(m.away, "Away")}
       </div>
-      <div class="status-line">${state === "pre" ? fmt.dayLong.format(w) : m.status.detail}${m.home.shootout != null ? `. Penalties ${m.home.shootout}-${m.away.shootout}` : ""}</div>
+      <div class="status-line">${state === "pre" ? fmt.dayLong.format(w) : m.status.detail}${d.liveUpdatedAt ? `. Live from ${d.liveSource}, updated ${ago(d.liveUpdatedAt)}` : ""}${m.home.shootout != null ? `. Penalties ${m.home.shootout}-${m.away.shootout}` : ""}</div>
       ${state === "pre" ? html`<div style="margin-top:var(--s4)">${countdownCells(m.date) || ""}</div>` : ""}
       <div class="facts">
         ${state !== "pre" ? html`<span>${icon("calendar-blank")}${fmt.dayLong.format(w)}</span>` : ""}
@@ -633,9 +635,10 @@ async function viewMatch(id, tab) {
     <div class="tabs-row">${tabs("match-tabs", [["summary", state === "pre" ? "Preview" : "Summary"], ["stats", "Stats"], ["lineups", "Lineups"]], tab, (t) => `#/match/${m.id}/${t}`)}</div>
     <div class="panel panel-body" role="tabpanel" aria-label="${tab}">${content(d)}</div>
   </div>`;
+  if (state === "pre" && Date.parse(m.date) - Date.now() < 75 * 60000) pollTimer = setTimeout(() => route(), 60000);
   if (state === "in") {
     liveRegion.textContent = `${m.home.name} ${m.home.score}, ${m.away.name} ${m.away.score}. ${m.status.detail || ""}`;
-    pollTimer = setTimeout(() => route(), 30000);
+    pollTimer = setTimeout(() => route(), 15000);
   }
 }
 
